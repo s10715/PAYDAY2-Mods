@@ -1,0 +1,108 @@
+{
+	"name" : "Get Object Information",
+	"description" : "Reveals string ids and key of objects.",
+	"author" : "",
+	"version" : "",
+	"priority" : 1
+	"keybinds" : [
+		{
+			"keybind_id" : "toggle_reveal_string_id",
+			"name" : "Reveal String ID Toggle",
+			"description" : "Toggle string id revealing.",
+			"script_path" : "lib/Reveal_String_ID_Toggle.lua",
+			"run_in_menu" : true,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "get_heist_name",
+			"name" : "Get Heist Name",
+			"description" : "Get code name of current heist.",
+			"script_path" : "lib/Get_Heist_Name.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "get_key_of_object",
+			"name" : "Get Key of Object",
+			"description" : "Get key of the object at the crosshair.",
+			"script_path" : "lib/Get_Key_of_Object.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "toggle_get_melee_hit_informations",
+			"name" : "Get Melee Hit Informations Toggle",
+			"description" : "Hit something with melee, then print the informations of hit position and hit unit.",
+			"script_path" : "lib/Get_Melee_Hit_Informations_Toggle.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "toggle_get_interaction_name",
+			"name" : "Get Interaction Name Toggle",
+			"description" : "Print interaction name when interact.",
+			"script_path" : "lib/Get_Interaction_Name_Toggle.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "get_units_around",
+			"name" : "Get Units Around",
+			"description" : "Print all units around player to file.",
+			"script_path" : "lib/Get_Units_Around.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "get_player_position",
+			"name" : "Get Player Position",
+			"description" : "Print player position vector.",
+			"script_path" : "lib/Get_Player_Position.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "reveal_vector_position",
+			"name" : "Reveal Vector Position",
+			"description" : "Add waypoint to the given vector position.",
+			"script_path" : "lib/Reveal_Vector_Position.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "print_triggered_elements_toggle",
+			"name" : "Print Triggered Elements",
+			"description" : "When you trigger an event the first time, its id will display on the screen.",
+			"script_path" : "lib/Print_Triggered_Elements_Toggle.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "get_mission_elements",
+			"name" : "Get Mission Elements",
+			"description" : "Get mission elements and save to file.",
+			"script_path" : "lib/Get_Mission_Elements.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "get_mission_elements2",
+			"name" : "Get Mission Elements2",
+			"description" : "Get mission elements and save to file.",
+			"script_path" : "lib/Get_Mission_Elements2.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+	]
+}
