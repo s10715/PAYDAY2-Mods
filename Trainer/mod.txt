@@ -1,0 +1,378 @@
+{
+	"name": "Trainer",
+	"description": "Tools for stealth and loud, make game easier.",
+	"author": "",
+	"contact": "",
+	"version": "1.0",
+	"blt_version": 2,
+	"persist_scripts" :
+	[
+		{"global" : "SpoofName", "script_path" : "lib/Spoof_Name_Hook.lua"}
+	],
+	"hooks" : [
+		{"hook_id" : "lib/tweak_data/groupaitweakdata","script_path" : "lib/Replace_All_Spawning_Units.lua"}
+	],
+	"keybinds" : 
+	[
+		{
+			"keybind_id" : "show_menu",
+			"name" : "Menu",
+			"description" : "Keybind to show menu.",
+			"script_path" : "Menu.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "toggle_invisible",
+			"name" : "Invisible Toggle",
+			"description" : "Become invisible.",
+			"script_path" : "lib/Become_Invisible_Toggle.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id": "toggle_mark_enemies",
+			"name": "Mark Enemies Toggle",
+			"description": "Mark enemies, civilians and cameras.",
+			"script_path": "lib/Mark_Enemies_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_unlimited_cable_ties",
+			"name": "Unlimited Cable Ties Toggle",
+			"description": "Use how many cable ties you want.",
+			"script_path": "lib/Unlimited_Cable_Ties_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_unlimited_body_bags",
+			"name": "Unlimited Body Bags Toggle",
+			"description": "Use how many body bags you want.",
+			"script_path": "lib/Unlimited_Body_Bags_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_steal_pagers",
+			"name": "Steal Pager Toggle (host only)",
+			"description": "No need to answer pager.",
+			"script_path": "lib/Steal_Pager_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_disable_alarms",
+			"name": "Disable Alarms Toggle (host only, bugged)",
+			"description": "Civs and cops stop reporting you, stop cameras. Still trigger alarm in the following cases: hit panic button, break glass with alarm, touch laser, detected by metal detector and so on. Bug: if you toggle alarms back, camera will keep disable.",
+			"script_path": "lib/Disable_Alarms_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "get_keycard",
+			"name": "Get Keycard",
+			"description": "Add 1 keycard. You can stack keycard when you are the host.",
+			"script_path": "lib/Get_Keycard.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id" : "interact_everything",
+			"name" : "Interact With Everything",
+			"description" : "Interact with everything. Some interactions about drill and hack only available in loud. Some stuff must be found first, can't interact directly.",
+			"script_path" : "lib/Interact_With_Everything.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id": "secure_loots",
+			"name": "Secure Loots",
+			"description": "Secure all loots, only work in some maps. Some bags like drill can be secured, and lead to missing mission items. Secure bags before secure area spawn might can not trigger escape event.",
+			"script_path": "lib/Secure_Loots.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id" : "toggle_melee_saw",
+			"name" : "Melee Saw Toggle",
+			"description" : "Apply saw usage at melee hit position, and open deposit boxes near by.",
+			"script_path" : "lib/Melee_Saw_Toggle.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "toggle_fast_zipline",
+			"name" : "Fast Zipline Toggle",
+			"description" : "Zipline speed is 4 times faster(as host), or drop bag at zipline end position directly(as client).",
+			"script_path" : "lib/Fast_Zipline_Toggle.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+		}
+		{
+			"keybind_id": "toggle_instant_drill",
+			"name": "Instant Drill Toggle",
+			"description": "Set all drill timer on the map to 0.5 seconds.",
+			"script_path": "lib/Instant_Drill_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_instant_interact",
+			"name": "Instant Interact Toggle",
+			"description": "Interaction now are instant.",
+			"script_path": "lib/Instant_Interact_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_mask",
+			"name": "Mask Toggle (might cause bug)",
+			"description": "Toggle mask on and off. You have to wait for the animation to toggle again, or you can't mask on again through pressing G.",
+			"script_path": "lib/State_Mask_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_cuff",
+			"name": "Cuff Toggle",
+			"description": "Cuff yourself.",
+			"script_path": "lib/State_Cuff_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_incapacitate",
+			"name": "Incapacitate Toggle",
+			"description": "Make yourself incapacitate.",
+			"script_path": "lib/State_Incapacitate_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_infinite_stamina",
+			"name": "Infinite Stamina Toggle",
+			"description": "Infinite stamina.",
+			"script_path": "lib/Infinite_Stamina_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "refresh_equipment",
+			"name": "Refresh Equipment",
+			"description": "Reset health and ammo, give you body bag and cable tie, won't give you projectile and deployable unless you are the host. Cheat detect if you use too many projectile or place too many deployable.",
+			"script_path": "lib/State_Refresh_Equipment.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_auto_heal",
+			"name": "Auto Heal Toggle",
+			"description": "Auto heal when you die, auto counter cloakers. Taser won't tase you(as host), or auto exit tase state in about 2 seconds after get tased by taser(as client). And disable some screen effect.",
+			"script_path": "lib/Auto_Heal_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "intimidate_and_trade",
+			"name": "Intimidate And Trade (partly host only)",
+			"description": "Try to intimidate an enemy in fov, and then try to trade hostage. You can intimidate unlimited enemies when you are host. Only available in loud.",
+			"script_path": "lib/Intimidate_And_Trade.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "revive_teammates",
+			"name": "Revive Teammates",
+			"description": "Revive yourself and reset your down count, revive other teammates.",
+			"script_path": "lib/Revive_Teammates.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "state_unjail",
+			"name": "Unjail (partly host only)",
+			"description": "Unjail player, bots and teammates. You can only unjail teammates when you're host.",
+			"script_path": "lib/State_Unjail.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_auto_aim",
+			"name": "Auto Aim Toggle",
+			"description": "A auto shoot aimbot, you will automatically shoot using a silent aimbot as soon as an enemy is killable. Only available in loud.",
+			"script_path": "lib/Auto_Aim_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_one_hit_kill",
+			"name": "One Hit Kill Toggle",
+			"description": "One hit kill.",
+			"script_path": "lib/One_Hit_Kill_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id" : "kill_and_tie",
+			"name" : "Kill And Tie (partly host only)",
+			"description" : "Kill all cops, tie all civilians, and destroy all cameras in the map.",
+			"script_path" : "lib/KillAllEnemies_And_TieAllCivilians.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+        	}
+		{
+			"keybind_id" : "toggle_destroy_turrets",
+			"name" : "Destroy Turrets Toggle",
+			"description" : "Destroy all turrets.",
+			"script_path" : "lib/Destroy_Turrets_Toggle.lua",
+			"run_in_menu" : false,
+			"run_in_game" : true,
+			"localized" : false
+        	}
+		{
+			"keybind_id": "toggle_sentries_auto_pickup",
+			"name": "Auto Pickup Sentries Toggle",
+			"description": "Auto Pickup Sentries before broken or on empty ammo, reduce ammo cost.",
+			"script_path": "lib/Sentries_Auto_Pickup_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_reflect_enemy_damage",
+			"name": "Reflect Enemy Damage Toggle",
+			"description": "Reflect enemies damage to themselves, still need to be careful of taser's electric shock and cloaker's kick.",
+			"script_path": "lib/Reflect_Enemy_Damage_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "convert_all_enemies",
+			"name": "Convert All Enemies (host only)",
+			"description": "Automatically convert all the available enemies in the map into jokers.",
+			"script_path": "lib/Convert_All_Enemies.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "spawn_equipment",
+			"name": "Spawn_Equipment (partly host only)",
+			"description": "Spawn equipment at crosshair.",
+			"script_path": "lib/Spawn_Equipment.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "spawn_unit",
+			"name": "Spawn Unit (host only, might crash game)",
+			"description": "Randomly spawn civilian or enemy. Don't spawn too fast, it might crash the game.",
+			"script_path": "lib/Spawn_Unit.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_noclip",
+			"name": "Noclip Toggle",
+			"description": "Noclip, speed is 5 times faster.",
+			"script_path": "lib/Noclip_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "teleport",
+			"name": "Warp To Crosshair",
+			"description": "Instantly teleport to the location of your crosshair.",
+			"script_path": "lib/Teleport.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "teleport_bot",
+			"name": "Teleport Bot (host only)",
+			"description": "Teleport a bot to your position.",
+			"script_path": "lib/Teleport_Bot.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_remove_ai",
+			"name": "Remove AI Toggle (host only)",
+			"description": "Remove AI.",
+			"script_path": "lib/Remove_AI_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "remove_invisible_walls",
+			"name": "Remove Invisible Walls",
+			"description": "Remove invisible walls cause of lag.",
+			"script_path": "lib/Remove_Invisible_Walls.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_hard_mode",
+			"name": "Hard Mode Toggle",
+			"description": "Death sentence damage on all difficulties, go to custoday instantly when you down. Won't affect death sentence.",
+			"script_path": "lib/Hard_Mode_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "toggle_assault_wave",
+			"name": "Assault Wave Toggle (host only)",
+			"description": "Start or end the assault wave.",
+			"script_path": "lib/Assault_Wave_Toggle.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+		{
+			"keybind_id": "instant_win",
+			"name": "Instant Win (host only)",
+			"description": "Instant win.",
+			"script_path": "lib/Instant_Win.lua",
+			"run_in_menu": false,
+			"run_in_game": true,
+			"localized": false
+		}
+	]
+}

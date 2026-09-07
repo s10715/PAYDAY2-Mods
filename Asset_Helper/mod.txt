@@ -1,0 +1,34 @@
+{
+	"name": "Asset Helper",
+	"description": "",
+	"author": "",
+	"hooks": [
+		{"hook_id": "lib/managers/dlcmanager", "script_path": "lib/DLC_Unlocker.lua"},
+		{"hook_id" : "lib/managers/perpetualeventmanager", "script_path" : "lib/Event_Items_Unlocker.lua"},
+		{"hook_id": "lib/managers/challengemanager", "script_path": "lib/Complete_All_Side_Jobs.lua"},
+		{"hook_id": "lib/managers/sidejobeventmanager", "script_path": "lib/Complete_All_Side_Jobs.lua"},
+		{"hook_id": "lib/managers/tangomanager", "script_path": "lib/Complete_All_Side_Jobs.lua"},
+		{"hook_id": "lib/managers/sidejobgenericdlcmanager", "script_path": "lib/Complete_All_Side_Jobs.lua"},
+		{"hook_id": "lib/managers/blackmarketmanager", "script_path": "lib/Weapon_Skin_Unlocker.lua"},
+	],
+	"keybinds" : [
+		{
+			"keybind_id" : "change_asset",
+			"name" : "Change Asset",
+			"description" : "Change your level, infamy_level, money, offshore_money, skillpoint and so on.",
+			"script_path" : "lib/Change_Asset.lua",
+			"run_in_menu" : true,
+			"run_in_game" : false,
+			"localized" : false
+		}
+		{
+			"keybind_id" : "load_and_save_build",
+			"name" : "Load And Save Build",
+			"description" : "Save your build to file, or load your build from file.",
+			"script_path" : "lib/Load_And_Save_Build.lua",
+			"run_in_menu" : true,
+			"run_in_game" : true,
+			"localized" : false
+		}
+	]
+}

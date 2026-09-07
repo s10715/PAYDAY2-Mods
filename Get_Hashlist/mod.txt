@@ -1,0 +1,20 @@
+{
+	"name": "Get_Hashlist",
+	"description": "Tools for generate Idstring by given string list.",
+	"author": "",
+	"contact": "",
+	"version": "1.0",
+	"blt_version": 2,
+	"keybinds" : 
+	[
+		{
+			"keybind_id" : "get_hashlist",
+			"name" : "Get Hashlist",
+			"description" : "",
+			"script_path" : "lib/Get_Hashlist.lua",
+			"run_in_menu" : true,
+			"run_in_game" : true,
+			"localized" : false
+		}
+	]
+}
