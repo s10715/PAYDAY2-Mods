@@ -598,20 +598,26 @@ local function set_build(build_string, check_only)
 		return (table.unpack or unpack)(result)
 	end
 
+	-- about the "checked" attribute: prevent multiple lines with the same start decode many times and set or buy too many times, we only decode the first line with the same start
 	local check_result = {
 		missing_dlcs={},
 		profile_name=nil,
 		skill_switch_name=nil,
-		skill_trees = { spent_points=nil, not_enough_points=false, },
-		perk_deck = { name=nil, invalid=false, missing_dlc=false, },
-		armor = { name=nil, invalid=false, },
-		projectile = { name=nil, invalid=false, missing_dlc=false, },
-		deployable = { [1]={ name=nil, invalid=false, missing_dlc=false, }, [2]={ name=nil, invalid=false, missing_dlc=false, }, },
-		primary_weapon = { name=nil, invalid=false, missing_dlc=false, no_empty_slot=false, },
-		secondary_weapon = { name=nil, invalid=false, missing_dlc=false, no_empty_slot=false, },
-		melee_weapon = { name=nil, invalid=false, missing_dlc=false, },
-		mask = { name=nil, invalid=false, missing_dlc=false, },
-		crew = { weapon_names={}, skills_and_abilities={}, missing_dlc=false, no_empty_slot=false, },
+		skill_trees = { spent_points=nil, not_enough_points=false, checked=false, },
+		perk_deck = { name=nil, invalid=false, missing_dlc=false, checked=false, },
+		armor = { name=nil, invalid=false, checked=false, },
+		projectile = { name=nil, invalid=false, missing_dlc=false, checked=false, },
+		deployable = { [1]={ name=nil, invalid=false, missing_dlc=false, checked=false, }, [2]={ name=nil, invalid=false, missing_dlc=false, checked=false, }, },
+		primary_weapon = { name=nil, invalid=false, missing_dlc=false, no_empty_slot=false, checked=false, },
+		secondary_weapon = { name=nil, invalid=false, missing_dlc=false, no_empty_slot=false, checked=false, },
+		melee_weapon = { name=nil, invalid=false, missing_dlc=false, checked=false, },
+		mask = { name=nil, invalid=false, missing_dlc=false, checked=false, },
+		crew = {
+			no_empty_slot=false,
+			[1] = { weapon_name=nil, skill=nil, ability=nil, missing_dlc=false, checked=false, },
+			[2] = { weapon_name=nil, skill=nil, ability=nil, missing_dlc=false, checked=false, },
+			[3] = { weapon_name=nil, skill=nil, ability=nil, missing_dlc=false, checked=false, },
+		}
 	}
 	local function check_dlc(dlc_name)
 		if dlc_name and not managers.dlc:is_dlc_unlocked(dlc_name) then
@@ -645,8 +651,9 @@ local function set_build(build_string, check_only)
 			elseif skill_switch_name and skill_switch_name ~= "" then
 				managers.skilltree:set_skill_switch_name(managers.skilltree:get_selected_skill_switch(), skill_switch_name)
 			end
-		elseif starts_with(line, "skill_trees=") then -- Skill Trees
+		elseif starts_with(line, "skill_trees=") and not check_result.skill_trees.checked then -- Skill Trees
 			local skill_trees = parse_string_to_array(remove_start(line, "skill_trees="))
+			check_result.skill_trees.checked = true
 			if check_only then
 				local spent_points = get_spent_skill_point(skill_trees)
 				check_result.skill_trees.spent_points = spent_points
@@ -695,7 +702,7 @@ local function set_build(build_string, check_only)
 					end
 				end
 			end
-		elseif starts_with(line, "perk_deck=") then -- Perk deck
+		elseif starts_with(line, "perk_deck=") and not check_result.perk_deck.checked then -- Perk deck
 			local perk_deck = nil
 			local card_data = {}
 			-- load perk_deck
@@ -704,6 +711,7 @@ local function set_build(build_string, check_only)
 					perk_deck = tonumber(remove_start(str, "perk_deck="))
 				end
 			end)
+			check_result.perk_deck.checked = true
 			if check_only then
 				if perk_deck and tweak_data.skilltree.specializations[perk_deck] then
 					check_result.perk_deck.name = managers.localization:text(tweak_data.skilltree.specializations[perk_deck].name_id)
@@ -736,8 +744,9 @@ local function set_build(build_string, check_only)
 					end
 				end
 			end
-		elseif starts_with(line, "armor=") then -- Armor
+		elseif starts_with(line, "armor=") and not check_result.armor.checked then -- Armor
 			local armor_name = remove_start(line, "armor=")
+			check_result.armor.checked = true
 			if check_only then
 				if armor_name and tweak_data.blackmarket.armors[armor_name] then
 					check_result.armor.name = managers.localization:text(tweak_data.blackmarket.armors[armor_name].name_id)
@@ -747,8 +756,9 @@ local function set_build(build_string, check_only)
 			elseif armor_name and armor_name ~= "" and tweak_data.blackmarket.armors[armor_name] then
 				managers.blackmarket:equip_armor(armor_name)
 			end
-		elseif starts_with(line, "projectile=") then -- Projectile
+		elseif starts_with(line, "projectile=") and not check_result.projectile.checked then -- Projectile
 			local projectile_name = remove_start(line, "projectile=")
+			check_result.projectile.checked = true
 			if check_only then
 				if projectile_name and tweak_data.blackmarket.projectiles[projectile_name] then
 					check_result.projectile.name = managers.localization:text(tweak_data.blackmarket.projectiles[projectile_name].name_id)
@@ -762,19 +772,23 @@ local function set_build(build_string, check_only)
 		elseif starts_with(line, "deployable_") then -- Deployable
 			for slot = 1, 2 do
 				local deployable_name = remove_start(line, "deployable_" .. tostring(slot) .. "=")
-				if check_only then
-					-- deployable can be empty
-					if deployable_name and tweak_data.blackmarket.deployables[deployable_name] then
-						check_result.deployable[slot].name = managers.localization:text(tweak_data.blackmarket.deployables[deployable_name].name_id)
-						check_result.deployable[slot].missing_dlc = not check_dlc(tweak_data.blackmarket.deployables[deployable_name].dlc)
-					elseif deployable_name and deployable_name ~= "" then
-						check_result.deployable[slot].invalid = true
+				if not check_result.deployable[slot] then check_result.deployable[slot] = {} end
+				if not check_result.deployable[slot].checked then
+					check_result.deployable[slot].checked = true
+					if check_only then
+						-- deployable can be empty
+						if deployable_name and tweak_data.blackmarket.deployables[deployable_name] then
+							check_result.deployable[slot].name = managers.localization:text(tweak_data.blackmarket.deployables[deployable_name].name_id)
+							check_result.deployable[slot].missing_dlc = not check_dlc(tweak_data.blackmarket.deployables[deployable_name].dlc)
+						elseif deployable_name and deployable_name ~= "" then
+							check_result.deployable[slot].invalid = true
+						end
+					elseif deployable_name and deployable_name ~= "" and tweak_data.blackmarket.deployables[deployable_name] then
+						managers.blackmarket:equip_deployable({ name=deployable_name, target_slot=slot })
 					end
-				elseif deployable_name and deployable_name ~= "" and tweak_data.blackmarket.deployables[deployable_name] then
-					managers.blackmarket:equip_deployable({ name=deployable_name, target_slot=slot })
 				end
 			end
-		elseif starts_with(line, "primary_weapon=") or starts_with(line, "secondary_weapon=") then -- Primary Weapon and Secondary Weapon
+		elseif (starts_with(line, "primary_weapon=") and not check_result.primary_weapon.checked) or (starts_with(line, "secondary_weapon=") and not check_result.secondary_weapon.checked) then -- Primary Weapon and Secondary Weapon
 			local weapon_category = nil
 			local weapon_name = nil
 			local weapon_skin_name = nil
@@ -795,6 +809,11 @@ local function set_build(build_string, check_only)
 					table.insert(weapon_attachments, str)
 				end
 			end)
+			if weapon_category == "primaries" then
+				check_result.primary_weapon.checked = true
+			elseif weapon_category == "secondaries" then
+				check_result.secondary_weapon.checked = true
+			end
 			if check_only then
 				if weapon_name and tweak_data.weapon[weapon_name] then
 					if weapon_category == "primaries" then
@@ -847,8 +866,9 @@ local function set_build(build_string, check_only)
 					end
 				end
 			end
-		elseif starts_with(line, "melee_weapon=") then -- Melee Weapon
+		elseif starts_with(line, "melee_weapon=") and not check_result.melee_weapon.checked then -- Melee Weapon
 			local melee_weapon_name = remove_start(line, "melee_weapon=")
+			check_result.melee_weapon.checked = true
 			if check_only then
 				if melee_weapon_name and tweak_data.blackmarket.melee_weapons[melee_weapon_name] then
 					check_result.melee_weapon.name = managers.localization:text(tweak_data.blackmarket.melee_weapons[melee_weapon_name].name_id)
@@ -859,8 +879,9 @@ local function set_build(build_string, check_only)
 			elseif melee_weapon_name and melee_weapon_name ~= "" and tweak_data.blackmarket.melee_weapons[melee_weapon_name] then
 				managers.blackmarket:equip_melee_weapon(melee_weapon_name)
 			end
-		elseif starts_with(line, "mask=") then -- Mask
+		elseif starts_with(line, "mask=") and not check_result.mask.checked then -- Mask
 			local mask_name = remove_start(line, "mask=")
+			check_result.mask.checked = true
 			if check_only then
 				if mask_name and tweak_data.blackmarket.masks[mask_name] then
 					check_result.mask.name = managers.localization:text(tweak_data.blackmarket.masks[mask_name].name_id)
@@ -941,55 +962,59 @@ local function set_build(build_string, check_only)
 							table.insert(crew_weapon_attachments, str)
 						end
 					end)
-					if check_only then
-						-- crew's skill, ability, weapon can be empty
-						if crew_skill and tweak_data.upgrades.crew_skill_definitions[crew_skill] then
-							check_result.crew.skills_and_abilities[crew_skill] = managers.localization:text(tweak_data.upgrades.crew_skill_definitions[crew_skill].name_id)
-						end
-						if crew_ability and tweak_data.upgrades.crew_ability_definitions[crew_ability] then
-							check_result.crew.skills_and_abilities[crew_ability] = managers.localization:text(tweak_data.upgrades.crew_ability_definitions[crew_ability].name_id)
-						end
-						if crew_weapon_real_name and tweak_data.weapon[crew_weapon_real_name] then
-							check_result.crew.weapon_names[crew_weapon_real_name] = managers.localization:text(tweak_data.weapon[crew_weapon_real_name].name_id)
-							check_result.crew.missing_dlc = not check_dlc(tweak_data.weapon[crew_weapon_real_name].global_value) or check_result.crew.missing_dlc
-							for _, crew_weapon_attachment in pairs(crew_weapon_attachments) do
-								check_result.crew.missing_dlc = not check_dlc(tweak_data.weapon.factory.parts[crew_weapon_attachment] and tweak_data.weapon.factory.parts[crew_weapon_attachment].dlc) or check_result.crew.missing_dlc
+					if not check_result.crew[idx] then check_result.crew[idx] = {} end
+					if not check_result.crew[idx].checked then
+						check_result.crew[idx].checked = true
+						if check_only then
+							-- crew's skill, ability, weapon can be empty
+							if crew_skill and tweak_data.upgrades.crew_skill_definitions[crew_skill] then
+								check_result.crew[idx].skill = managers.localization:text(tweak_data.upgrades.crew_skill_definitions[crew_skill].name_id)
 							end
-							check_result.crew.no_empty_slot = not managers.blackmarket:_get_free_weapon_slot("primaries")
-						end
-					else
-						if crew_skill and crew_skill ~= "" and managers.blackmarket:verify_has_crew_skill(crew_skill) then
-							henchmen_data.skill = crew_skill
-						end
-						if crew_ability and crew_ability ~= "" and managers.blackmarket:verify_has_crew_ability(crew_ability) then
-							henchmen_data.ability = crew_ability
-						end
-						if crew_weapon_name and crew_weapon_name ~= "" and crew_weapon_real_name and crew_weapon_real_name ~= "" then
-							local already_equipped = false
-							local current_crew_weapon_slot = managers.blackmarket:_verify_crew_weapon("primaries", henchmen_data.primary, henchmen_data.primary_slot) and henchmen_data.primary_slot or nil
-							if check_weapon("primaries", current_crew_weapon_slot, crew_weapon_real_name, crew_weapon_skin_name, crew_weapon_skin_bonus, crew_weapon_attachments) then
-								already_equipped = true
+							if crew_ability and tweak_data.upgrades.crew_ability_definitions[crew_ability] then
+								check_result.crew[idx].ability = managers.localization:text(tweak_data.upgrades.crew_ability_definitions[crew_ability].name_id)
 							end
-							if not already_equipped then
-								for slot, weapon in pairs(Global.blackmarket_manager.crafted_items["primaries"] or {}) do
-									if weapon and weapon.weapon_id == crew_weapon_real_name and check_weapon("primaries", slot, crew_weapon_real_name, crew_weapon_skin_name, crew_weapon_skin_bonus, crew_weapon_attachments) then
-										-- treat as equipped even if this weapon not available for crew as long as weapon information match
-										already_equipped = true
-										if managers.blackmarket:_verify_crew_weapon("primaries", crew_weapon_name, slot) then
-											henchmen_data.primary = crew_weapon_name
-											henchmen_data.primary_slot = slot
-											break
+							if crew_weapon_real_name and tweak_data.weapon[crew_weapon_real_name] then
+								check_result.crew[idx].weapon_name = managers.localization:text(tweak_data.weapon[crew_weapon_real_name].name_id)
+								check_result.crew[idx].missing_dlc = not check_dlc(tweak_data.weapon[crew_weapon_real_name].global_value) or check_result.crew[idx].missing_dlc
+								for _, crew_weapon_attachment in pairs(crew_weapon_attachments) do
+									check_result.crew[idx].missing_dlc = not check_dlc(tweak_data.weapon.factory.parts[crew_weapon_attachment] and tweak_data.weapon.factory.parts[crew_weapon_attachment].dlc) or check_result.crew[idx].missing_dlc
+								end
+								check_result.crew.no_empty_slot = not managers.blackmarket:_get_free_weapon_slot("primaries")
+							end
+						else
+							if crew_skill and crew_skill ~= "" and managers.blackmarket:verify_has_crew_skill(crew_skill) then
+								henchmen_data.skill = crew_skill
+							end
+							if crew_ability and crew_ability ~= "" and managers.blackmarket:verify_has_crew_ability(crew_ability) then
+								henchmen_data.ability = crew_ability
+							end
+							if crew_weapon_name and crew_weapon_name ~= "" and crew_weapon_real_name and crew_weapon_real_name ~= "" then
+								local already_equipped = false
+								local current_crew_weapon_slot = managers.blackmarket:_verify_crew_weapon("primaries", henchmen_data.primary, henchmen_data.primary_slot) and henchmen_data.primary_slot or nil
+								if check_weapon("primaries", current_crew_weapon_slot, crew_weapon_real_name, crew_weapon_skin_name, crew_weapon_skin_bonus, crew_weapon_attachments) then
+									already_equipped = true
+								end
+								if not already_equipped then
+									for slot, weapon in pairs(Global.blackmarket_manager.crafted_items["primaries"] or {}) do
+										if weapon and weapon.weapon_id == crew_weapon_real_name and check_weapon("primaries", slot, crew_weapon_real_name, crew_weapon_skin_name, crew_weapon_skin_bonus, crew_weapon_attachments) then
+											-- treat as equipped even if this weapon not available for crew as long as weapon information match
+											already_equipped = true
+											if managers.blackmarket:_verify_crew_weapon("primaries", crew_weapon_name, slot) then
+												henchmen_data.primary = crew_weapon_name
+												henchmen_data.primary_slot = slot
+												break
+											end
 										end
 									end
 								end
-							end
-							if not already_equipped then
-								local empty_slot = managers.blackmarket:_get_free_weapon_slot("primaries")
-								if empty_slot then
-									buy_weapon("primaries", empty_slot, crew_weapon_real_name, crew_weapon_skin_name, crew_weapon_skin_bonus, crew_weapon_attachments)
-									if managers.blackmarket:get_crafted_category_slot("primaries", empty_slot) then
-										henchmen_data.primary = crew_weapon_name
-										henchmen_data.primary_slot = empty_slot
+								if not already_equipped then
+									local empty_slot = managers.blackmarket:_get_free_weapon_slot("primaries")
+									if empty_slot then
+										buy_weapon("primaries", empty_slot, crew_weapon_real_name, crew_weapon_skin_name, crew_weapon_skin_bonus, crew_weapon_attachments)
+										if managers.blackmarket:get_crafted_category_slot("primaries", empty_slot) then
+											henchmen_data.primary = crew_weapon_name
+											henchmen_data.primary_slot = empty_slot
+										end
 									end
 								end
 							end
@@ -1015,17 +1040,6 @@ local function check_and_set_build(build_string)
 	local check_result = set_build(build_string, true) or {}
 	local show_msgs = {}
 
-	if (check_result.primary_weapon and check_result.primary_weapon.no_empty_slot) or (check_result.secondary_weapon and check_result.secondary_weapon.no_empty_slot) or (check_result.crew and check_result.crew.no_empty_slot) then
-		local hint = "Please ensure you have enough empty weapon slot to buy new weapon."
-		table.insert(show_msgs, hint)
-	end
-	if next(check_result.missing_dlcs or {}) then
-		local hint = "Missing DLC(s): "
-		for dlc_name, _ in pairs(check_result.missing_dlcs) do
-			hint = hint .. tostring(dlc_name) .. ", "
-		end
-		table.insert(show_msgs, string.sub(hint, 1, -3) .. "\n")
-	end
 	if check_result.profile_name then
 		local hint = "profile name: " .. tostring(check_result.profile_name)
 		table.insert(show_msgs, hint)
@@ -1071,7 +1085,7 @@ local function check_and_set_build(build_string)
 	if check_result.deployable then
 		for i = 1, 2 do
 			if check_result.deployable[i] and check_result.deployable[i].name then
-				local hint = "deployable " .. tostring(i) .. ": " .. tostring(check_result.deployable[i].name)
+				local hint = "deployable-" .. tostring(i) .. ": " .. tostring(check_result.deployable[i].name)
 				if check_result.deployable[i].missing_dlc then
 					hint = hint .. " (missing dlc)"
 				end
@@ -1122,25 +1136,39 @@ local function check_and_set_build(build_string)
 		local hint = "mask invalid!"
 		table.insert(show_msgs, hint)
 	end
-	if check_result.crew then
-		if next(check_result.crew.weapon_names or {}) then
-			local hint = "crew weapon"
-			if check_result.crew.missing_dlc then
-				hint = hint .. "(missing dlc)"
+	if next(type(check_result.crew) == 'table' and check_result.crew or {}) then
+		for idx, _ in pairs(managers.blackmarket._global._selected_henchmen or {}) do
+			local hint = ""
+			if check_result.crew[idx] and check_result.crew[idx].weapon_name then
+				hint = hint .. "weapon: " .. tostring(check_result.crew[idx].weapon_name)
+				if check_result.crew[idx].missing_dlc then
+					hint = hint .. " (missing dlc)"
+				end
+				hint = hint .. ", "
 			end
-			hint = hint .. ": "
-			for _, name in pairs(check_result.crew.weapon_names) do
-				hint = hint .. tostring(name) .. ", "
+			if check_result.crew[idx] and check_result.crew[idx].skill then
+				hint = hint .. "skill: " .. tostring(check_result.crew[idx].skill) .. ", "
 			end
-			table.insert(show_msgs, string.sub(hint, 1, -3))
+			if check_result.crew[idx] and check_result.crew[idx].ability then
+				hint = hint .. "ability: " .. tostring(check_result.crew[idx].ability) .. ", "
+			end
+			if hint ~= "" then
+				hint = "crew-" .. tostring(idx) .. " " .. hint
+				table.insert(show_msgs, string.sub(hint, 1, -3))
+			end
 		end
-		if next(check_result.crew.skills_and_abilities or {}) then
-			local hint = "crew skills and abilities: "
-			for _, skill in pairs(check_result.crew.skills_and_abilities) do
-				hint = hint .. tostring(skill) .. ", "
-			end
-			table.insert(show_msgs, string.sub(hint, 1, -3))
+	end
+
+	if (check_result.primary_weapon and check_result.primary_weapon.no_empty_slot) or (check_result.secondary_weapon and check_result.secondary_weapon.no_empty_slot) or (check_result.crew and check_result.crew.no_empty_slot) then
+		local hint = "\nPlease ensure you have enough empty weapon slot to buy new weapon."
+		table.insert(show_msgs, hint)
+	end
+	if next(check_result.missing_dlcs or {}) then
+		local hint = "Missing DLC(s): "
+		for dlc_name, _ in pairs(check_result.missing_dlcs) do
+			hint = hint .. tostring(dlc_name) .. ", "
 		end
+		table.insert(show_msgs, "\n" .. string.sub(hint, 1, -3))
 	end
 
 	local msg_text = ""
@@ -1150,7 +1178,7 @@ local function check_and_set_build(build_string)
 	local dialog = {
 		focus_button = 1,
 		title = "Confirm",
-		text = "Please confirm whether you want to overwrite current profile with build below. \n" .. msg_text,
+		text = "Please confirm whether you want to overwrite current profile with build below. \n\n" .. msg_text,
 		font_size = tweak_data.menu.pd2_medium_font_size,
 		button_list = {
 			{ text = managers.localization:text("dialog_yes"), callback_func = function()
