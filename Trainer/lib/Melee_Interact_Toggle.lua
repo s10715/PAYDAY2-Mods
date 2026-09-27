@@ -8,7 +8,7 @@ local destroy_repeat_equipment = false -- destroy bag is host only, but you can 
 local function interact(unit)
 	local interaction = unit and alive(unit) and unit:interaction()
 	local player_unit = managers.player and managers.player:player_unit() and alive(managers.player:player_unit()) and managers.player:player_unit() or nil
-	if not interaction or not interaction._tweak_data or not player_unit or not alive(player_unit) then return end
+	if not interaction or not interaction.interact or not interaction._tweak_data or not player_unit or not alive(player_unit) then return end
 	if interaction._owner_id and not interaction:is_owner() then return end
 
 	if safe_interaction_only and not table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[unit] then
@@ -22,8 +22,8 @@ local function interact(unit)
 		function PlayerManager:verify_carry(...) return true end
 		orig_PlayerManager_register_carry = PlayerManager.register_carry
 		function PlayerManager:register_carry(...) return true end
-		--[[orig_NetworkPeer_verify_bag = NetworkPeer.verify_bag
-		function NetworkPeer:verify_bag(...) return true end]]--
+		orig_NetworkPeer_verify_bag = NetworkPeer.verify_bag
+		function NetworkPeer:verify_bag(...) return true end
 	end
 	local function enable_bag_check()
 		if orig_PlayerManager_verify_carry then
@@ -32,9 +32,9 @@ local function interact(unit)
 		if orig_PlayerManager_register_carry then
 			PlayerManager.register_carry = orig_PlayerManager_register_carry
 		end
-		--[[if orig_NetworkPeer_verify_bag then
+		if orig_NetworkPeer_verify_bag then
 			NetworkPeer.verify_bag = orig_NetworkPeer_verify_bag
-		end]]--
+		end
 	end
 	if managers.player and managers.player:is_carrying() and unit.carry_data and unit:carry_data() and unit:carry_data():can_secure() and unit:carry_data():value() > 0 then
 		if tweak_data.carry and tweak_data.carry.small_loot and not tweak_data.carry.small_loot[unit:carry_data():carry_id()] then
@@ -143,7 +143,7 @@ local function interact(unit)
 	enable_bag_check()
 end
 
-local function melee_interact()
+local function get_melee_hit_unit()
 	local player_unit = managers and managers.player and managers.player:player_unit()
 	if not player_unit or not alive(player_unit) then return end
 
@@ -198,18 +198,38 @@ local function melee_interact()
 		end
 	end
 
-	if unit then
-		interact(unit)
+	return unit
+end
+
+local function melee_interact(enable)
+	if enable then
+		orig_PlayerManager_remove_equipment = orig_PlayerManager_remove_equipment or PlayerManager.remove_equipment
+		function PlayerManager:remove_equipment(equipment_id, ...)
+			local equipment, index = self:equipment_data_by_name(equipment_id)
+			if not equipment then -- fix crash
+				return
+			end
+			return orig_PlayerManager_remove_equipment(self, equipment_id, ...)
+		end
+		Hooks:PostHook(PlayerStandard, "_do_action_melee", "Melee_Interact", function(self, ...)
+			local unit = get_melee_hit_unit()
+			if unit then
+				interact(unit)
+			end
+		end)
+	else
+		if orig_PlayerManager_remove_equipment then
+			PlayerManager.remove_equipment = orig_PlayerManager_remove_equipment
+		end
+		Hooks:RemovePostHook("Melee_Interact")
 	end
 end
 
 
 if global_meleeinteract_toggle then
-	Hooks:PostHook(PlayerStandard, "_do_action_melee", "Melee_Interact", function(self, ...)
-		melee_interact()
-	end)
+	melee_interact(true)
 	managers.mission._fading_debug_output:script().log('Melee Interact - Activated',  Color.green)
 else
-	Hooks:RemovePostHook("Melee_Interact")
+	melee_interact(false)
 	managers.mission._fading_debug_output:script().log('Melee Interact - Deactivated',  Color.red)
 end
