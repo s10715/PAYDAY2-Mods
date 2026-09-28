@@ -328,7 +328,7 @@ local function remove_all_units_mark()
 	for u_key, u_data in pairs(managers.enemy:all_enemies()) do
 		remove_determined_contour(u_data.unit, 2)
 	end
-	for _, unit in pairs(managers.groupai:state()._security_cameras) do
+	for _, unit in pairs(SecurityCamera.cameras or {}) do
 		remove_determined_contour(unit, 3)
 	end
 end
@@ -343,8 +343,10 @@ local function mark_all_units(important_npc_only)
 	for u_key, u_data in pairs(managers.enemy:all_enemies() or {}) do
 		determine_contour(important_npc_only, u_data.unit, 2)
 	end
-	for _, unit in pairs(managers.groupai:state()._security_cameras or {}) do
-		determine_contour(important_npc_only, unit, 3)
+	for _, unit in pairs(SecurityCamera.cameras or {}) do
+		if unit.base and unit:base() and unit:base().destroyed and not unit:base():destroyed() then
+			determine_contour(important_npc_only, unit, 3)
+		end
 	end
 end
 
