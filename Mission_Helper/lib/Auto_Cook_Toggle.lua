@@ -408,6 +408,66 @@ elseif Global.game_settings and Global.game_settings.level_id == "pal" then -- f
 	toggle_autocook()
 	check_make_counterfeit()
 
+elseif Global.game_settings and Global.game_settings.level_id == "arena" then -- The Alesso Heist
+	if RequiredScript == "lib/managers/dialogmanager" then
+		local function arena_auto_hack(id, delay)
+			DelayedCalls:Add("arena_auto_hack", delay or 0.5, function()
+				if not global_autocook_toggle then return end
+				if not managers.player or not managers.player:player_unit() or not alive(managers.player:player_unit()) then return end
+
+				local actions = {
+					Play_pln_al1_04 = {"are_laptop"},
+					Play_pyr_al1_03 = {"answer_call"},
+					Play_pln_al1_left = {"left_button"},
+					Play_pln_al1_middle = {"middle_button"},
+					Play_pln_al1_right = {"right_button"},
+					Play_pln_al1_left_middle = {[1]="left_button", [2]="middle_button"},
+					Play_pln_al1_left_right = {[1]="left_button", [2]="right_button"},
+					Play_pln_al1_middle_left = {[1]="middle_button", [2]="left_button"},
+					Play_pln_al1_middle_right = {[1]="middle_button", [2]="right_button"},
+					Play_pln_al1_right_left = {[1]="right_button", [2]="left_button"},
+					Play_pln_al1_right_middle = {[1]="right_button", [2]="middle_button"},
+				}
+				if not actions[id] then return end
+
+				local units = {
+					["are_laptop"] = nil,
+					["answer_call"] = nil,
+					["left_button"] = nil,
+					["middle_button"] = nil,
+					["right_button"] = nil,
+				}
+				for _, unit in pairs(managers.interaction._interactive_units) do
+					if unit and alive(unit) and unit.interaction and unit:interaction() then
+						if unit:interaction().tweak_data == "are_laptop" then
+							units["are_laptop"] = unit
+						elseif unit:interaction().tweak_data == "answer_call" then
+							units["answer_call"] = unit
+						elseif unit:interaction().tweak_data == "push_button" and mvector3.distance(unit:position(), Vector3(-434, 5326.09, 914.832)) < 10 then
+							units["left_button"] = unit
+						elseif unit:interaction().tweak_data == "push_button" and mvector3.distance(unit:position(), Vector3(-259, 5326.09, 914.832)) < 10 then
+							units["middle_button"] = unit
+						elseif unit:interaction().tweak_data == "push_button" and mvector3.distance(unit:position(), Vector3(-84, 5326.09, 914.832)) < 10 then
+							units["right_button"] = unit
+						end
+					end
+				end
+				for i = 1, #actions[id] do
+					local unit = units[actions[id][i]]
+					if unit then
+						unit:interaction():interact(managers.player:player_unit())
+					end
+				end
+			end)
+		end
+		Hooks:PostHook(DialogManager, "queue_dialog", "arena_auto_hack", function(self, id, ...)
+			if not global_autocook_toggle then return end
+			arena_auto_hack(id, (id=="Play_pyr_al1_03" and 4 or nil))
+		end)
+	end
+	if is_hook then return end
+	toggle_autocook()
+
 elseif Global.game_settings and (Global.game_settings.level_id == "roberts" or Global.game_settings.level_id == "nmh") then -- for GO Bank and No Mercy
 	if is_hook then return end
 
