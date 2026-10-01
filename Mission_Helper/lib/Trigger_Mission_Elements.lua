@@ -311,58 +311,6 @@ end
 
 -- partly host only
 local function finish_timer_partly_host()
-	-- for dirll and timer ui, work as both server and client
-	local function finish_drill()
-		if managers.job and managers.job:current_level_id() == "help" then -- this script won't work in Prison Nightmare
-			return
-		end
-		local is_success = false
-		for unit_idx, unit in pairs(World:find_units_quick("all") or {}) do
-			if alive(unit) then
-				local timer_gui = (type(unit.timer_gui) == "function") and unit:timer_gui()
-				local digital_gui = ((type(unit.digital_gui) == "function") and unit:digital_gui()) or ((type(unit.digital_gui_upper) == "function") and unit:digital_gui_upper())
-				if timer_gui then
-					if timer_gui._started and timer_gui._update_enabled and not timer_gui._done then
-						if timer_gui._jammed then
-							timer_gui:set_jammed(false)
-						end
-						if not timer_gui._powered then
-							timer_gui:set_powered(true)
-						end
-						timer_gui._current_jam_timer = nil
-						timer_gui._current_timer = 0
-						timer_gui._time_left = 0
-						timer_gui._update_enabled = false
-						unit:set_extension_update_enabled(Idstring("timer_gui"), false)
-						timer_gui:done()
-						if managers.network:session() then
-							managers.network:session():send_to_peers_synched("start_timer_gui", unit:timer_gui()._unit, 0)
-						end
-						for i = 1, 3 do
-							DelayedCalls:Add("anti_jam_" .. tostring(unit_idx) .. "_" .. tostring(i), 2 * i, function()
-								if alive(unit) and unit:interaction() and unit:interaction():active() and alive(managers.player:player_unit()) and timer_gui._jammed and timer_gui._powered then
-									local special_equipment = unit:interaction()._tweak_data and unit:interaction()._tweak_data.special_equipment or nil
-									unit:interaction()._tweak_data.special_equipment = nil
-									unit:interaction():interact(managers.player:player_unit())
-									unit:interaction()._tweak_data.special_equipment = special_equipment
-									if type(unit._kill_drill_effect) == 'function' then unit:_kill_drill_effect() end
-									if type(unit._kill_jammed_effect) == 'function' then unit:_kill_jammed_effect() end
-								end
-							end)
-						end
-						is_success = true
-					end
-				elseif digital_gui then
-					if digital_gui and digital_gui:is_timer() and digital_gui._timer_count_down and digital_gui._timer and digital_gui._timer > 0 then
-						digital_gui._floored_last_timer = -1
-						digital_gui:timer_set(0, true)
-					end
-				end
-			end
-		end
-		return is_success
-	end
-
 	-- some drill or timelock can be finished by trigger mission element, so that can work as both server and client
 	local function finish_timelock_by_mission_element()
 		local is_success = false
@@ -371,7 +319,7 @@ local function finish_timer_partly_host()
 			for _, unit in pairs(World:find_units_quick("all") or {}) do
 				if alive(unit) and unit:name() == Idstring("units/payday2/props/gen_prop_security_timelock/gen_prop_security_timelock") then
 					if type(unit.digital_gui) == "function" and unit:digital_gui() and type(unit:digital_gui()._timer) == "number" and unit:digital_gui()._timer > 0 then
-						local big_bank_timelock_editor_names = { "timelock_timer", "disable_laser", "disable" }
+						local big_bank_timelock_editor_names = {"disable_laser", "call", "enable_phone", "all_fine", "answered", "timelock_timer" }
 						if trigger_mission_elements({}, {}, big_bank_timelock_editor_names) then
 							is_success = true
 							break
@@ -429,6 +377,58 @@ local function finish_timer_partly_host()
 		return is_success
 	end
 
+	-- for dirll and timer ui, work as both server and client
+	local function finish_drill()
+		if managers.job and managers.job:current_level_id() == "help" then -- this script won't work in Prison Nightmare
+			return
+		end
+		local is_success = false
+		for unit_idx, unit in pairs(World:find_units_quick("all") or {}) do
+			if alive(unit) then
+				local timer_gui = (type(unit.timer_gui) == "function") and unit:timer_gui()
+				local digital_gui = ((type(unit.digital_gui) == "function") and unit:digital_gui()) or ((type(unit.digital_gui_upper) == "function") and unit:digital_gui_upper())
+				if timer_gui then
+					if timer_gui._started and timer_gui._update_enabled and not timer_gui._done then
+						if timer_gui._jammed then
+							timer_gui:set_jammed(false)
+						end
+						if not timer_gui._powered then
+							timer_gui:set_powered(true)
+						end
+						timer_gui._current_jam_timer = nil
+						timer_gui._current_timer = 0
+						timer_gui._time_left = 0
+						timer_gui._update_enabled = false
+						unit:set_extension_update_enabled(Idstring("timer_gui"), false)
+						timer_gui:done()
+						if managers.network:session() then
+							managers.network:session():send_to_peers_synched("start_timer_gui", unit:timer_gui()._unit, 0)
+						end
+						for i = 1, 3 do
+							DelayedCalls:Add("anti_jam_" .. tostring(unit_idx) .. "_" .. tostring(i), 2 * i, function()
+								if alive(unit) and unit:interaction() and unit:interaction():active() and alive(managers.player:player_unit()) and timer_gui._jammed and timer_gui._powered then
+									local special_equipment = unit:interaction()._tweak_data and unit:interaction()._tweak_data.special_equipment or nil
+									unit:interaction()._tweak_data.special_equipment = nil
+									unit:interaction():interact(managers.player:player_unit())
+									unit:interaction()._tweak_data.special_equipment = special_equipment
+									if type(unit._kill_drill_effect) == 'function' then unit:_kill_drill_effect() end
+									if type(unit._kill_jammed_effect) == 'function' then unit:_kill_jammed_effect() end
+								end
+							end)
+						end
+						is_success = true
+					end
+				elseif digital_gui then
+					if digital_gui and digital_gui:is_timer() and digital_gui._timer_count_down and digital_gui._timer and digital_gui._timer > 0 then
+						digital_gui._floored_last_timer = -1
+						digital_gui:timer_set(0, true)
+					end
+				end
+			end
+		end
+		return is_success
+	end
+
 	-- for timelock, host only
 	local function finish_timelock_host()
 		if not Network:is_server() then return end
@@ -465,8 +465,8 @@ local function finish_timer_partly_host()
 	end
 
 	local is_success = false
-	is_success = finish_drill() or is_success
 	is_success = finish_timelock_by_mission_element() or is_success
+	is_success = finish_drill() or is_success
 	is_success = finish_timelock_host() or is_success
 	if is_success and managers.mission then
 		managers.mission._fading_debug_output:script().log('Finish Timer',  Color.yellow)

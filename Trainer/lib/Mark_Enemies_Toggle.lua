@@ -2,6 +2,8 @@ global_markenemies_toggle = not global_markenemies_toggle
 
 local mark_sync_to_teammates = false
 local mark_important_npc_sync_to_teammates = false
+local auto_mark_special_units_in_loud = false -- this might cause lag
+local auto_refresh_waypoint = false -- this might cause lag
 local draw_interactions_box = false
 
 local important_npc_per_heist = {
@@ -428,16 +430,18 @@ local function show_units_mark()
 	end)
 
 	if not managers.groupai:state():whisper_mode() then
-		-- mark special enemies in loud instead of all enemies, refresh units every 4 seconds
-		local run_now = true
-		local function check_special_units()
-			DelayedCalls:Add("check_special_units", run_now and 0.01 or 4, function()
-				run_now = false
-				mark_special_units_in_fov()
-				check_special_units()
-			end)
+		if auto_mark_special_units_in_loud then
+			-- mark special enemies in loud instead of all enemies, refresh units every 4 seconds
+			local run_now = true
+			local function check_special_units()
+				DelayedCalls:Add("check_special_units", run_now and 0.01 or 4, function()
+					run_now = false
+					mark_special_units_in_fov()
+					check_special_units()
+				end)
+			end
+			check_special_units()
 		end
-		check_special_units()
 	end
 end
 
@@ -858,6 +862,18 @@ local important_item_idstrings = {
 	["pbr2"] = { -- Birth of Sky
 		{ idstring = Idstring("units/pd2_dlc_jerry/equipment/jry_int_money_crate/jry_int_money_crate"), show_distance = true, force = true, check_collision = { position_offset = Vector3(0, 0, 0), find_distance = 111.343, }, },
 		{ idstring = Idstring("units/pd2_dlc_jerry/pickups/jry_pku_money_pile/jry_pku_money_pile"), icon = "wp_bag", show_distance = true, force = true, check_collision = { position_offset = Vector3(0, 0, 0), find_distance = 29.5739, }, },
+		{ interaction = "pickup_keycard", icon = "equipment_bank_manager_key", show_distance = true, },
+		{ interaction = "hold_remove_ladder", icon = "pd2_ladder", show_distance = true, force = true, check_collision = { find_distance = 50 }, 
+			check_function = function(unit)
+				if unit and alive(unit) and unit.unit_data and unit:unit_data() and unit:unit_data().instance then
+					if string.find(tostring(unit:unit_data().instance), "placed") then
+						return false
+					else
+						return true
+					end
+				end
+			end,
+		},
 	},
 	["pbr"] = { -- Beneath the Mountain
 		{ idstring = Idstring("units/pd2_dlc_berry/props/bry_prop_crate_wood_murkywater/bry_prop_crate_wood_murkywater"), show_distance = true, distance_limit = Vector3(0, 0, 800), 
@@ -1653,6 +1669,263 @@ local collection_idstrings ={
 	},
 }
 
+local function get_important_items_rule_list()
+	local level_id = Global.level_data and Global.level_data.level_id
+	local rule_list = important_item_idstrings and important_item_idstrings[level_id] or {}
+	local default_search_list = World:find_units_quick("all", 1) or {}
+	return rule_list, default_search_list
+end
+
+local function get_big_loots_rule_list()
+	local rule_list = {}
+	local default_search_list = managers and managers.interaction and managers.interaction._interactive_units or {}
+
+	-- change format
+	local level_id = Global.level_data and Global.level_data.level_id
+	for data_id, data in pairs(common_big_loot_idstrings or {}) do
+		if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
+			local is_interaction_allowed = true
+			if common_big_loot_idstrings.invalid_interaction_per_heist and common_big_loot_idstrings.invalid_interaction_per_heist[level_id] then
+				for _, invalid_interaction in pairs(common_big_loot_idstrings.invalid_interaction_per_heist[level_id]) do
+					if data.interaction == invalid_interaction then
+						is_interaction_allowed = false
+						break
+					end
+				end
+			end
+			if common_big_loot_idstrings.invalid_location_per_heist and common_big_loot_idstrings.invalid_location_per_heist[level_id] then
+				local invalid_location_list = {}
+				for _, invalid_location in pairs(common_big_loot_idstrings.invalid_location_per_heist[level_id]) do
+					table.insert(invalid_location_list, invalid_location)
+				end
+				data.invalid_location_list = invalid_location_list
+			end
+			if is_interaction_allowed then
+				table.insert(rule_list, data)
+			end
+		end
+	end
+	return rule_list, default_search_list
+end
+
+local function get_small_loots_rule_list()
+	local rule_list = {}
+	local default_search_list = managers and managers.interaction and managers.interaction._interactive_units or {}
+
+	-- change format
+	local level_id = Global.level_data and Global.level_data.level_id
+	for data_id, data in pairs(common_small_loot_idstrings or {}) do
+		if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
+			local is_interaction_allowed = true
+			if common_small_loot_idstrings.invalid_interaction_per_heist and common_small_loot_idstrings.invalid_interaction_per_heist[level_id] then
+				for _, invalid_interaction in pairs(common_small_loot_idstrings.invalid_interaction_per_heist[level_id]) do
+					if data.interaction == invalid_interaction then
+						is_interaction_allowed = false
+						break
+					end
+				end
+			end
+			if common_small_loot_idstrings.invalid_location_per_heist and common_small_loot_idstrings.invalid_location_per_heist[level_id] then
+				local invalid_location_list = {}
+				for _, invalid_location in pairs(common_small_loot_idstrings.invalid_location_per_heist[level_id]) do
+					table.insert(invalid_location_list, invalid_location)
+				end
+				data.invalid_location_list = invalid_location_list
+			end
+			if is_interaction_allowed then
+				table.insert(rule_list, data)
+			end
+		end
+	end
+	return rule_list, default_search_list
+end
+
+local function get_collections_rule_list()
+	local rule_list = {}
+	local default_search_list = World:find_units_quick("all", 1 , 20) or {}
+
+	-- change format
+	local level_id = Global.level_data and Global.level_data.level_id
+	for _, data in pairs(collection_idstrings and collection_idstrings["common"] or {}) do table.insert(rule_list, data) end
+	for _, data in pairs(collection_idstrings and collection_idstrings[level_id] or {}) do table.insert(rule_list, data) end
+	return rule_list, default_search_list
+end
+
+local function apply_rule_list(unit, rule_list)
+	for _, data in pairs((type(rule_list) == "table" and rule_list) or {}) do
+		if data and type(data) == "table" and unit and alive(unit) and unit.position and unit:position() and (
+		  (unit.name and tostring(unit:name()) == tostring(data.idstring) and not data.interaction) or 
+		  (unit.interaction and unit:interaction() and unit:interaction().tweak_data == data.interaction and not data.idstring) or
+		  (unit.name and tostring(unit:name()) == tostring(data.idstring) and unit.interaction and unit:interaction() and unit:interaction().tweak_data == data.interaction)
+		  ) then
+			local is_add_waypoint = true
+
+			if data.loud_only and managers and managers.groupai and managers.groupai:state() and managers.groupai:state():whisper_mode() then
+				is_add_waypoint = false
+			end
+			if data.stealth_only and managers and managers.groupai and managers.groupai:state() and not managers.groupai:state():whisper_mode() then
+				is_add_waypoint = false
+			end
+
+			-- if unit have interaction, then only add waypoint for unit which interaction is available
+			-- force means ignore it's interaction state
+			if is_add_waypoint and data.force then
+				is_add_waypoint = true
+			elseif is_add_waypoint and not data.force and unit.interaction and unit:interaction() then
+				is_add_waypoint = false
+				if table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[unit] then
+					is_add_waypoint = true
+				end
+				--[[
+				-- this is faster, but can't add waypoint to newly spawn item that hook by ObjectInteractionManager.add_unit
+				if unit:interaction().active and unit:interaction():active() then
+					is_add_waypoint = true
+				end
+				]]--
+			end
+
+			-- if already have that special equipment, won't highlight others anymore
+			if is_add_waypoint and not data.ignore_count and unit.interaction and unit:interaction() then
+				if unit:interaction()._tweak_data.special_equipment_block and managers and managers.player and managers.player._equipment.specials[unit:interaction()._tweak_data.special_equipment_block] then
+					is_add_waypoint = false
+				end
+				if unit:interaction().tweak_data == "pickup_keycard" and managers.player and managers.player._equipment.specials["bank_manager_key"] then
+					is_add_waypoint = false
+				end
+				if (unit:interaction().tweak_data == "fex_take_diesel" or unit:interaction().tweak_data == "fex_take_diesel_axis") and managers.player and managers.player._equipment.specials["diesel"] then
+					is_add_waypoint = false
+				end
+				if string.find(unit:interaction().tweak_data, "c4") and managers.player._equipment.specials["c4"] then
+					is_add_waypoint = false
+				end
+			end
+
+			-- compare player position with unit position, if distance exceeds given limit then won't highlight
+			if is_add_waypoint and data.distance_limit and managers and managers.player and managers.player:player_unit() and alive(managers.player:player_unit()) then
+				local unit_pos = unit:position()
+				local player_pos = managers.player:player_unit():movement():m_head_pos()
+				local limit = data.distance_limit
+				if (limit.x ~= 0 and math.abs(unit_pos.x - player_pos.x) > limit.x) or (limit.y ~= 0 and math.abs(unit_pos.y - player_pos.y) > limit.y) or (limit.z ~= 0 and math.abs(unit_pos.z - player_pos.z) > limit.z) then
+					is_add_waypoint = false
+				end
+			end
+
+			-- check invalid location, if find unit at those position with given idstring or interaction then won't highlight
+			if is_add_waypoint and data.invalid_location_list and type(data.invalid_location_list) == "table" then
+				for _, invalid_pos in pairs(data.invalid_location_list) do
+					--[[if tostring(unit:position()) == tostring(invalid_pos) then
+						is_add_waypoint = false
+						break
+					end]]--
+					if mvector3.distance(unit:position(), invalid_pos) < 10 then -- allow inaccuracy
+						is_add_waypoint = false
+						break
+					end
+				end
+			end
+
+			-- check if unit have collision size, or check if unit is in its proper position (for example, set find_position.z to top of the unit, and set find_distance to a small number, if unit get shorter, then won't add waypoint)
+			if is_add_waypoint and data.check_collision and type(data.check_collision) == "table" then
+				is_add_waypoint = false
+				local find_position = unit:position()
+				if data.check_collision.position_offset and data.check_collision.position_offset.x and data.check_collision.position_offset.y and data.check_collision.position_offset.z then
+					find_position = Vector3(unit:position().x + data.check_collision.position_offset.x, unit:position().y + data.check_collision.position_offset.y, unit:position().z + data.check_collision.position_offset.z)
+				end
+				local find_direction = data.check_collision.find_direction or Vector3(0, 0, 1)
+				local find_distance = data.check_collision.find_distance or 1
+				local bodies = World:find_bodies("intersect", "cylinder", find_position, find_direction, find_distance, managers.slot:get_mask("bullet_impact_targets"))
+				for _, hit_body in pairs(bodies) do
+					if hit_body:unit() and alive(hit_body:unit()) and hit_body:unit() == unit then
+						is_add_waypoint = true
+						break
+					end
+				end
+			end
+
+			-- check if there's any unit with given idstring or interaction around that unit
+			if is_add_waypoint and data.with_units_around and type(data.with_units_around) == "table" then
+				is_add_waypoint = false
+				for _, find_data in pairs(data.with_units_around) do
+					local found_units = World:find_units_quick("sphere", unit:position(), find_data.find_distance or 1, managers.slot:get_mask("all"))
+					for _, found_unit in ipairs(found_units) do
+						if found_unit and alive(found_unit) and (found_unit.name and tostring(found_unit:name()) == tostring(find_data.idstring)) or (found_unit.interaction and found_unit:interaction() and found_unit:interaction().tweak_data == find_data.interaction) then
+							if find_data.force then
+								is_add_waypoint = true
+								break
+							elseif not find_data.force and found_unit.interaction and found_unit:interaction() then
+								for _, interactive_unit in pairs(managers.interaction._interactive_units or {}) do
+									if found_unit == interactive_unit then
+										is_add_waypoint = true
+										break
+									end
+								end
+								if is_add_waypoint then
+									break
+								end
+							elseif not found_unit.interaction or not found_unit:interaction() then
+								is_add_waypoint = true
+							end
+						end
+					end
+				end
+			end
+
+			-- check if there's any unit with given idstring or interaction exist in the map
+			if is_add_waypoint and data.with_units_exist and type(data.with_units_exist) == "table" then
+				is_add_waypoint = false
+				for _, find_data in pairs(data.with_units_exist) do
+					local filter_world_units = managers.slot:get_mask("all")
+					for _, found_unit in pairs(World:find_units_quick("all", filter_world_units) or {}) do
+						if found_unit and alive(found_unit) and (found_unit.name and tostring(found_unit:name()) == tostring(find_data.idstring)) or (found_unit.interaction and found_unit:interaction() and found_unit:interaction().tweak_data == find_data.interaction) then
+							if find_data.force then
+								is_add_waypoint = true
+								break
+							elseif not find_data.force and found_unit.interaction and found_unit:interaction() then
+								for _, interactive_unit in pairs(managers.interaction._interactive_units or {}) do
+									if found_unit == interactive_unit then
+										is_add_waypoint = true
+										break
+									end
+								end
+								if is_add_waypoint then
+									break
+								end
+							elseif not found_unit.interaction or not found_unit:interaction() then
+								is_add_waypoint = true
+							end
+						end
+					end
+				end
+			end
+
+			-- check if there's check_function for this unit, this normally use mission elements, and basically host only
+			if is_add_waypoint and data.check_function then
+				is_add_waypoint = data.check_function(unit)
+			end
+
+			if is_add_waypoint then
+				local waypoint_position = nil
+				if unit.interaction and unit:interaction() and unit:interaction().interact_position and unit:interaction():interact_position() then
+					waypoint_position = unit:interaction():interact_position()
+				else
+					waypoint_position = unit:position()
+				end
+
+				-- find a unique identifier for this unit
+				local waypoint_name = nil
+				if unit.id and unit:id() ~= -1 then
+					waypoint_name = tostring(unit:id())
+				else
+					-- if two units at the same position, then only show one waypoint is acceptable
+					waypoint_name = tostring(unit:position())
+				end
+
+				return true, waypoint_position, waypoint_name, data.icon, data.color, data.show_distance
+			end
+		end
+	end
+end
+
 local function add_waypoint(position, waypoint_name, icon, color, show_distance)
 	if position and waypoint_name and managers and managers.hud and managers.hud.add_waypoint then
 		managers.hud:add_waypoint(
@@ -1704,7 +1977,7 @@ local function remove_waypoint(waypoint_name)
 	end
 end
 
-local function remove_all_waypoints()
+--[[local function remove_all_waypoints()
 	if managers and managers.hud and managers.hud._hud and managers.hud._hud.waypoints and managers.hud.remove_waypoint then
 		for waypoint_name, waypoint in pairs(managers.hud._hud.waypoints) do
 			if waypoint_name then
@@ -1712,268 +1985,7 @@ local function remove_all_waypoints()
 			end
 		end
 	end
-end
-
-local function check_and_add_waypoint(unit_list, check_list)
-	local waypoint_name_list = {}
-	local level_id = Global.level_data and Global.level_data.level_id
-	for _, unit in pairs( (type(unit_list) == "table" and unit_list) or {} ) do
-		for _, data in pairs( (type(check_list) == "table" and check_list) or {} ) do
-			if data and type(data) == "table" and unit and alive(unit) and unit.position and unit:position() and (
-			  (unit.name and tostring(unit:name()) == tostring(data.idstring) and not data.interaction) or 
-			  (unit.interaction and unit:interaction() and unit:interaction().tweak_data == data.interaction and not data.idstring) or
-			  (unit.name and tostring(unit:name()) == tostring(data.idstring) and unit.interaction and unit:interaction() and unit:interaction().tweak_data == data.interaction)
-			  ) then
-				local is_add_waypoint = true
-
-				if data.loud_only and managers and managers.groupai and managers.groupai:state() and managers.groupai:state():whisper_mode() then
-					is_add_waypoint = false
-				end
-				if data.stealth_only and managers and managers.groupai and managers.groupai:state() and not managers.groupai:state():whisper_mode() then
-					is_add_waypoint = false
-				end
-
-				-- if unit have interaction, then only add waypoint for unit which interaction is available
-				-- force means ignore it's interaction state
-				if is_add_waypoint and data.force then
-					is_add_waypoint = true
-				elseif is_add_waypoint and not data.force and unit.interaction and unit:interaction() then
-					is_add_waypoint = false
-					for _, interactive_unit in pairs(managers.interaction._interactive_units or {}) do
-						if unit == interactive_unit then
-							is_add_waypoint = true
-							break
-						end
-					end
-					--[[
-					-- this is faster, but can't add waypoint to newly spawn item that hook by ObjectInteractionManager.add_unit
-					if unit:interaction().active and unit:interaction():active() then
-						is_add_waypoint = true
-					end
-					]]--
-				end
-
-				-- if already have that special equipment, won't highlight others anymore
-				if is_add_waypoint and not data.ignore_count and unit.interaction and unit:interaction() then
-					if unit:interaction()._tweak_data.special_equipment_block and managers and managers.player and managers.player._equipment.specials[unit:interaction()._tweak_data.special_equipment_block] then
-						is_add_waypoint = false
-					end
-					if unit:interaction().tweak_data == "pickup_keycard" and managers.player and managers.player._equipment.specials["bank_manager_key"] then
-						is_add_waypoint = false
-					end
-					if (unit:interaction().tweak_data == "fex_take_diesel" or unit:interaction().tweak_data == "fex_take_diesel_axis") and managers.player and managers.player._equipment.specials["diesel"] then
-						is_add_waypoint = false
-					end
-					if string.find(unit:interaction().tweak_data, "c4") and managers.player._equipment.specials["c4"] then
-						is_add_waypoint = false
-					end
-				end
-
-				-- compare player position with unit position, if distance exceeds given limit then won't highlight
-				if is_add_waypoint and data.distance_limit and managers and managers.player and managers.player:player_unit() and alive(managers.player:player_unit()) then
-					local unit_pos = unit:position()
-					local player_pos = managers.player:player_unit():movement():m_head_pos()
-					local limit = data.distance_limit
-					if (limit.x ~= 0 and math.abs(unit_pos.x - player_pos.x) > limit.x) or (limit.y ~= 0 and math.abs(unit_pos.y - player_pos.y) > limit.y) or (limit.z ~= 0 and math.abs(unit_pos.z - player_pos.z) > limit.z) then
-						is_add_waypoint = false
-					end
-				end
-
-				-- check invalid location, if find unit at those position with given idstring or interaction then won't highlight
-				if is_add_waypoint and data.invalid_location_list and type(data.invalid_location_list) == "table" then
-					for _, invalid_pos in pairs(data.invalid_location_list) do
-						--[[if tostring(unit:position()) == tostring(invalid_pos) then
-							is_add_waypoint = false
-							break
-						end]]--
-						if mvector3.distance(unit:position(), invalid_pos) < 10 then -- allow inaccuracy
-							is_add_waypoint = false
-							break
-						end
-					end
-				end
-
-				-- check if unit have collision size, or check if unit is in its proper position (for example, set find_position.z to top of the unit, and set find_distance to a small number, if unit get shorter, then won't add waypoint)
-				if is_add_waypoint and data.check_collision and type(data.check_collision) == "table" then
-					is_add_waypoint = false
-					local find_position = unit:position()
-					if data.check_collision.position_offset and data.check_collision.position_offset.x and data.check_collision.position_offset.y and data.check_collision.position_offset.z then
-						find_position = Vector3(unit:position().x + data.check_collision.position_offset.x, unit:position().y + data.check_collision.position_offset.y, unit:position().z + data.check_collision.position_offset.z)
-					end
-					local find_direction = data.check_collision.find_direction or Vector3(0, 0, 1)
-					local find_distance = data.check_collision.find_distance or 1
-					local bodies = World:find_bodies("intersect", "cylinder", find_position, find_direction, find_distance, managers.slot:get_mask("bullet_impact_targets"))
-					for _, hit_body in pairs(bodies) do
-						if hit_body:unit() and alive(hit_body:unit()) and hit_body:unit() == unit then
-							is_add_waypoint = true
-							break
-						end
-					end
-				end
-
-				-- check if there's any unit with given idstring or interaction around that unit
-				if is_add_waypoint and data.with_units_around and type(data.with_units_around) == "table" then
-					is_add_waypoint = false
-					for _, find_data in pairs(data.with_units_around) do
-						local found_units = World:find_units_quick("sphere", unit:position(), find_data.find_distance or 1, managers.slot:get_mask("all"))
-						for _, found_unit in ipairs(found_units) do
-							if found_unit and alive(found_unit) and (found_unit.name and tostring(found_unit:name()) == tostring(find_data.idstring)) or (found_unit.interaction and found_unit:interaction() and found_unit:interaction().tweak_data == find_data.interaction) then
-								if find_data.force then
-									is_add_waypoint = true
-									break
-								elseif not find_data.force and found_unit.interaction and found_unit:interaction() then
-									for _, interactive_unit in pairs(managers.interaction._interactive_units or {}) do
-										if found_unit == interactive_unit then
-											is_add_waypoint = true
-											break
-										end
-									end
-									if is_add_waypoint then
-										break
-									end
-								elseif not found_unit.interaction or not found_unit:interaction() then
-									is_add_waypoint = true
-								end
-							end
-						end
-					end
-				end
-
-				-- check if there's any unit with given idstring or interaction exist in the map
-				if is_add_waypoint and data.with_units_exist and type(data.with_units_exist) == "table" then
-					is_add_waypoint = false
-					for _, find_data in pairs(data.with_units_exist) do
-						local filter_world_units = managers.slot:get_mask("all")
-						for _, found_unit in pairs(World:find_units_quick("all", filter_world_units) or {}) do
-							if found_unit and alive(found_unit) and (found_unit.name and tostring(found_unit:name()) == tostring(find_data.idstring)) or (found_unit.interaction and found_unit:interaction() and found_unit:interaction().tweak_data == find_data.interaction) then
-								if find_data.force then
-									is_add_waypoint = true
-									break
-								elseif not find_data.force and found_unit.interaction and found_unit:interaction() then
-									for _, interactive_unit in pairs(managers.interaction._interactive_units or {}) do
-										if found_unit == interactive_unit then
-											is_add_waypoint = true
-											break
-										end
-									end
-									if is_add_waypoint then
-										break
-									end
-								elseif not found_unit.interaction or not found_unit:interaction() then
-									is_add_waypoint = true
-								end
-							end
-						end
-					end
-				end
-
-				-- check if there's check_function for this unit, this normally use mission elements, and basically host only
-				if is_add_waypoint and data.check_function then
-					is_add_waypoint = data.check_function(unit)
-				end
-
-				if is_add_waypoint then
-					-- find a unique identifier for this unit
-					local waypoint_name = nil
-					if unit.id and unit:id() ~= -1 then
-						waypoint_name = tostring(unit:id())
-					elseif unit.position and unit:position() then
-						-- if two units at the same position, then only show one waypoint is acceptable
-						waypoint_name = tostring(unit:position())
-					else
-						waypoint_name = tostring(math.random())
-					end
-
-					local waypoint_position = nil
-					if unit.interaction and unit:interaction() and unit:interaction().interact_position and unit:interaction():interact_position() then
-						waypoint_position = unit:interaction():interact_position()
-					else
-						waypoint_position = unit:position()
-					end
-
-					waypoint_name_list[unit] = waypoint_name
-					add_waypoint(waypoint_position, waypoint_name, data.icon, data.color, data.show_distance)
-				end
-			end
-		end
-	end
-
-	return waypoint_name_list
-end
-
-local function add_waypoint_to_important_items(unit_list)
-	local level_id = Global.level_data and Global.level_data.level_id
-	return check_and_add_waypoint((type(unit_list) == 'table' and next(unit_list) and unit_list) or World:find_units_quick("all", 1), important_item_idstrings and important_item_idstrings[level_id])
-end
-
-local function add_waypoint_to_big_loots(unit_list)
-	-- change format
-	local big_loot_list = {}
-	local level_id = Global.level_data and Global.level_data.level_id
-	for data_id, data in pairs(common_big_loot_idstrings or {}) do
-		if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
-			local is_interaction_allowed = true
-			if common_big_loot_idstrings.invalid_interaction_per_heist and common_big_loot_idstrings.invalid_interaction_per_heist[level_id] then
-				for _, invalid_interaction in pairs(common_big_loot_idstrings.invalid_interaction_per_heist[level_id]) do
-					if data.interaction == invalid_interaction then
-						is_interaction_allowed = false
-						break
-					end
-				end
-			end
-			if common_big_loot_idstrings.invalid_location_per_heist and common_big_loot_idstrings.invalid_location_per_heist[level_id] then
-				local invalid_location_list = {}
-				for _, invalid_location in pairs(common_big_loot_idstrings.invalid_location_per_heist[level_id]) do
-					table.insert(invalid_location_list, invalid_location)
-				end
-				data.invalid_location_list = invalid_location_list
-			end
-			if is_interaction_allowed then
-				table.insert(big_loot_list, data)
-			end
-		end
-	end
-	return check_and_add_waypoint((type(unit_list) == 'table' and next(unit_list) and unit_list) or managers and managers.interaction and managers.interaction._interactive_units, big_loot_list)
-end
-
-local function add_waypoint_to_small_loots(unit_list)
-	-- change format
-	local small_loot_list = {}
-	local level_id = Global.level_data and Global.level_data.level_id
-	for data_id, data in pairs(common_small_loot_idstrings or {}) do
-		if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
-			local is_interaction_allowed = true
-			if common_small_loot_idstrings.invalid_interaction_per_heist and common_small_loot_idstrings.invalid_interaction_per_heist[level_id] then
-				for _, invalid_interaction in pairs(common_small_loot_idstrings.invalid_interaction_per_heist[level_id]) do
-					if data.interaction == invalid_interaction then
-						is_interaction_allowed = false
-						break
-					end
-				end
-			end
-			if common_small_loot_idstrings.invalid_location_per_heist and common_small_loot_idstrings.invalid_location_per_heist[level_id] then
-				local invalid_location_list = {}
-				for _, invalid_location in pairs(common_small_loot_idstrings.invalid_location_per_heist[level_id]) do
-					table.insert(invalid_location_list, invalid_location)
-				end
-				data.invalid_location_list = invalid_location_list
-			end
-			if is_interaction_allowed then
-				table.insert(small_loot_list, data)
-			end
-		end
-	end
-	return check_and_add_waypoint((type(unit_list) == 'table' and next(unit_list) and unit_list) or managers and managers.interaction and managers.interaction._interactive_units, small_loot_list)
-end
-
-local function add_waypoint_to_collections(unit_list)
-	-- change format
-	local level_id = Global.level_data and Global.level_data.level_id
-	local collection_list = {}
-	for _, data in pairs(collection_idstrings and collection_idstrings["common"] or {}) do table.insert(collection_list, data) end
-	for _, data in pairs(collection_idstrings and collection_idstrings[level_id] or {}) do table.insert(collection_list, data) end
-	return check_and_add_waypoint((type(unit_list) == 'table' and next(unit_list) and unit_list) or World:find_units_quick("all",1 ,20), collection_list)
-end
+end]]--
 
 
 global_markenemies_waypoint_cache = global_markenemies_waypoint_cache or {}
@@ -1996,61 +2008,58 @@ local function remove_determined_waypoints(unit_list)
 	end
 end
 
--- show waypoint by given waypoint_list_idx, and update waypoint name cache
+-- only add waypoint to units that not in cache, and clear waypoints that no longer exist, so waypoint UI can be incremental updated (won't show the relocate anim)
+local function update_determined_waypoint(unit_list, rule_list)
+	local is_any_waypoint_added = false
+	for _, unit in pairs((type(unit_list) == "table" and unit_list) or {}) do
+		local is_add_waypoint, waypoint_position, waypoint_name, waypoint_icon, waypoint_icon_color, is_show_distance = apply_rule_list(unit, rule_list)
+		if is_add_waypoint and not global_markenemies_waypoint_cache[unit] then
+			global_markenemies_waypoint_cache[unit] = waypoint_name
+			add_waypoint(waypoint_position, waypoint_name, waypoint_icon, waypoint_icon_color, is_show_distance)
+			is_any_waypoint_added = true
+		elseif not is_add_waypoint and global_markenemies_waypoint_cache[unit] then
+			remove_waypoint(global_markenemies_waypoint_cache[unit])
+			global_markenemies_waypoint_cache[unit] = nil
+		end
+	end
+
+	return is_any_waypoint_added
+end
+
+-- show waypoint by given waypoint_list_idx, and update cache
 -- if unit_list parameter exists, then only update units' waypoint in this list
 -- if any waypoint is updated, then return true
-local function determine_waypoint(waypoint_list_idx, unit_list)
+local function determine_waypoint(waypoint_list_idx, unit_list, refresh)
 	if not waypoint_list_idx then
 		waypoint_list_idx = global_markenemies_waypoint_list_idx
 	end
 
-	local new_waypoints = {}
+	local rule_list, default_search_list, hint_msg
 	if waypoint_list_idx == 1 then
-		if unit_list then
-			new_waypoints = add_waypoint_to_important_items(unit_list)
-		else
-			remove_determined_waypoints()
-			new_waypoints = add_waypoint_to_important_items()
-			if next(new_waypoints) then managers.mission._fading_debug_output:script().log("Show Mission Items Waypoint",  Color.green) end
-		end
+		rule_list, default_search_list = get_important_items_rule_list()
+		hint_msg = "Show Mission Items Waypoint"
 	elseif waypoint_list_idx == 2 then
-		if unit_list then
-			new_waypoints = add_waypoint_to_big_loots(unit_list)
-		else
-			remove_determined_waypoints()
-			new_waypoints = add_waypoint_to_big_loots()
-			if next(new_waypoints) then managers.mission._fading_debug_output:script().log("Show Big Loots Waypoint",  Color.green) end
-		end
+		rule_list, default_search_list = get_big_loots_rule_list()
+		hint_msg = "Show Big Loots Waypoint"
 	elseif waypoint_list_idx == 3 then
-		if unit_list then
-			new_waypoints = add_waypoint_to_small_loots(unit_list)
-		else
-			remove_determined_waypoints()
-			new_waypoints = add_waypoint_to_small_loots()
-			if next(new_waypoints) then managers.mission._fading_debug_output:script().log("Show Small Loots Waypoint",  Color.green) end
-		end
+		rule_list, default_search_list = get_small_loots_rule_list()
+		hint_msg = "Show Small Loots Waypoint"
 	elseif waypoint_list_idx == 4 then
-		if unit_list then
-			new_waypoints = add_waypoint_to_collections(unit_list)
-		else
-			remove_determined_waypoints()
-			new_waypoints = add_waypoint_to_collections()
-			if next(new_waypoints) then managers.mission._fading_debug_output:script().log("Show Collections Waypoint",  Color.green) end
-		end
+		rule_list, default_search_list = get_collections_rule_list()
+		hint_msg = "Show Collections Waypoint"
 	end
 
 	if unit_list then
-		for unit, waypoint_name in pairs(new_waypoints) do
-			if global_markenemies_waypoint_cache[unit] then
-				remove_waypoint(global_markenemies_waypoint_cache[unit])
-			end
-			global_markenemies_waypoint_cache[unit] = waypoint_name
-		end
+		update_determined_waypoint(unit_list, rule_list)
+	elseif refresh then
+		update_determined_waypoint(default_search_list, rule_list)
 	else
-		global_markenemies_waypoint_cache = new_waypoints
+		remove_determined_waypoints()
+		if update_determined_waypoint(default_search_list, rule_list) then
+			managers.mission._fading_debug_output:script().log(tostring(hint_msg),  Color.green)
+			return true
+		end
 	end
-
-	return (next(new_waypoints) ~= nil)
 end
 
 local function show_next_waypoint_list(idx)
@@ -2063,18 +2072,31 @@ local function show_next_waypoint_list(idx)
 		global_markenemies_waypoint_list_idx = idx
 	end
 
+	-- handle waypoint refreshing
 	if ObjectInteractionManager then
 		-- add waypoint after creating new interactive unit, such as unit spawn after deposit opened
 		Hooks:PostHook(ObjectInteractionManager, "add_unit", "Mark_Enemies_add_waypoint", function(self, unit, ...)
+			if not Utils or not Utils:IsInHeist() then return end
 			local unit_list = { unit }
-			determine_waypoint(nil, unit_list)
+			determine_waypoint(nil, unit_list, nil)
 		end)
 
 		-- remove waypoint after interact
 		Hooks:PreHook(ObjectInteractionManager, "remove_unit", "Mark_Enemies_remove_waypoint", function(self, unit, ...)
+			if not Utils or not Utils:IsInHeist() then return end
 			local unit_list = { unit }
 			remove_determined_waypoints(unit_list)
 		end)
+	end
+	if auto_refresh_waypoint then
+		local function do_auto_refresh_waypoint()
+			DelayedCalls:Add("Mark_Enemies_auto_refresh_waypoint", 10, function()
+				if not Utils or not Utils:IsInHeist() then return end
+				determine_waypoint(nil, nil, true)
+				do_auto_refresh_waypoint()
+			end)
+		end
+		do_auto_refresh_waypoint()
 	end
 
 	-- search from next_idx to max_idx
@@ -2097,6 +2119,9 @@ end
 local function hide_waypoints_list()
 	Hooks:RemovePostHook("Mark_Enemies_add_waypoint")
 	Hooks:RemovePreHook("Mark_Enemies_remove_waypoint")
+
+	DelayedCalls:Remove("Mark_Enemies_auto_refresh_waypoint")
+	DelayedCalls:Add("Mark_Enemies_auto_refresh_waypoint", 0, function() end)
 
 	remove_determined_waypoints()
 end
