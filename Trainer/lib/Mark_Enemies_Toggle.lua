@@ -399,6 +399,7 @@ local function hide_units_mark()
 	Hooks:RemovePreHook("Mark_Enemies_on_civilian_died")
 	Hooks:RemovePostHook("Mark_Enemies_register_enemy")
 	Hooks:RemovePreHook("Mark_Enemies_on_enemy_died")
+	Hooks:RemovePreHook("Mark_Enemies_register_security_camera")
 
 	DelayedCalls:Remove("check_special_units")
 	-- if you remove a id that doesn't exist, it will remove it next time when it's created
@@ -427,6 +428,13 @@ local function show_units_mark()
 	end)
 	Hooks:PreHook(EnemyManager, "on_enemy_died", "Mark_Enemies_on_enemy_died", function(self, dead_unit, damage_info)
 		remove_determined_contour(dead_unit, 2)
+	end)
+	Hooks:PreHook(GroupAIStateBase, "register_security_camera", "Mark_Enemies_register_security_camera", function(self, unit, state)
+		if state then
+			determine_contour(important_npc_only, unit, 3)
+		else
+			remove_determined_contour(unit, 3)
+		end
 	end)
 
 	if not managers.groupai:state():whisper_mode() then
@@ -1680,30 +1688,35 @@ local function get_big_loots_rule_list()
 	local rule_list = {}
 	local default_search_list = managers and managers.interaction and managers.interaction._interactive_units or {}
 
-	-- change format
-	local level_id = Global.level_data and Global.level_data.level_id
-	for data_id, data in pairs(common_big_loot_idstrings or {}) do
-		if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
-			local is_interaction_allowed = true
-			if common_big_loot_idstrings.invalid_interaction_per_heist and common_big_loot_idstrings.invalid_interaction_per_heist[level_id] then
-				for _, invalid_interaction in pairs(common_big_loot_idstrings.invalid_interaction_per_heist[level_id]) do
-					if data.interaction == invalid_interaction then
-						is_interaction_allowed = false
-						break
+	if not common_big_loot_idstrings.rule_list_cache then
+		-- change format
+		local level_id = Global.level_data and Global.level_data.level_id
+		for data_id, data in pairs(common_big_loot_idstrings or {}) do
+			if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
+				local is_interaction_allowed = true
+				if common_big_loot_idstrings.invalid_interaction_per_heist and common_big_loot_idstrings.invalid_interaction_per_heist[level_id] then
+					for _, invalid_interaction in pairs(common_big_loot_idstrings.invalid_interaction_per_heist[level_id]) do
+						if data.interaction == invalid_interaction then
+							is_interaction_allowed = false
+							break
+						end
 					end
 				end
-			end
-			if common_big_loot_idstrings.invalid_location_per_heist and common_big_loot_idstrings.invalid_location_per_heist[level_id] then
-				local invalid_location_list = {}
-				for _, invalid_location in pairs(common_big_loot_idstrings.invalid_location_per_heist[level_id]) do
-					table.insert(invalid_location_list, invalid_location)
+				if common_big_loot_idstrings.invalid_location_per_heist and common_big_loot_idstrings.invalid_location_per_heist[level_id] then
+					local invalid_location_list = {}
+					for _, invalid_location in pairs(common_big_loot_idstrings.invalid_location_per_heist[level_id]) do
+						table.insert(invalid_location_list, invalid_location)
+					end
+					data.invalid_location_list = invalid_location_list
 				end
-				data.invalid_location_list = invalid_location_list
-			end
-			if is_interaction_allowed then
-				table.insert(rule_list, data)
+				if is_interaction_allowed then
+					table.insert(rule_list, data)
+				end
 			end
 		end
+		common_big_loot_idstrings.rule_list_cache = rule_list
+	else
+		rule_list = common_big_loot_idstrings.rule_list_cache
 	end
 	return rule_list, default_search_list
 end
@@ -1712,30 +1725,35 @@ local function get_small_loots_rule_list()
 	local rule_list = {}
 	local default_search_list = managers and managers.interaction and managers.interaction._interactive_units or {}
 
-	-- change format
-	local level_id = Global.level_data and Global.level_data.level_id
-	for data_id, data in pairs(common_small_loot_idstrings or {}) do
-		if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
-			local is_interaction_allowed = true
-			if common_small_loot_idstrings.invalid_interaction_per_heist and common_small_loot_idstrings.invalid_interaction_per_heist[level_id] then
-				for _, invalid_interaction in pairs(common_small_loot_idstrings.invalid_interaction_per_heist[level_id]) do
-					if data.interaction == invalid_interaction then
-						is_interaction_allowed = false
-						break
+	if not common_small_loot_idstrings.rule_list_cache then
+		-- change format
+		local level_id = Global.level_data and Global.level_data.level_id
+		for data_id, data in pairs(common_small_loot_idstrings or {}) do
+			if data and type(data) == "table" and data_id ~= "invalid_location_per_heist" and data_id ~= "invalid_interaction_per_heist" then
+				local is_interaction_allowed = true
+				if common_small_loot_idstrings.invalid_interaction_per_heist and common_small_loot_idstrings.invalid_interaction_per_heist[level_id] then
+					for _, invalid_interaction in pairs(common_small_loot_idstrings.invalid_interaction_per_heist[level_id]) do
+						if data.interaction == invalid_interaction then
+							is_interaction_allowed = false
+							break
+						end
 					end
 				end
-			end
-			if common_small_loot_idstrings.invalid_location_per_heist and common_small_loot_idstrings.invalid_location_per_heist[level_id] then
-				local invalid_location_list = {}
-				for _, invalid_location in pairs(common_small_loot_idstrings.invalid_location_per_heist[level_id]) do
-					table.insert(invalid_location_list, invalid_location)
+				if common_small_loot_idstrings.invalid_location_per_heist and common_small_loot_idstrings.invalid_location_per_heist[level_id] then
+					local invalid_location_list = {}
+					for _, invalid_location in pairs(common_small_loot_idstrings.invalid_location_per_heist[level_id]) do
+						table.insert(invalid_location_list, invalid_location)
+					end
+					data.invalid_location_list = invalid_location_list
 				end
-				data.invalid_location_list = invalid_location_list
-			end
-			if is_interaction_allowed then
-				table.insert(rule_list, data)
+				if is_interaction_allowed then
+					table.insert(rule_list, data)
+				end
 			end
 		end
+		common_small_loot_idstrings.rule_list_cache = rule_list
+	else
+		rule_list = common_small_loot_idstrings.rule_list_cache
 	end
 	return rule_list, default_search_list
 end
@@ -1744,10 +1762,15 @@ local function get_collections_rule_list()
 	local rule_list = {}
 	local default_search_list = World:find_units_quick("all", 1 , 20) or {}
 
-	-- change format
-	local level_id = Global.level_data and Global.level_data.level_id
-	for _, data in pairs(collection_idstrings and collection_idstrings["common"] or {}) do table.insert(rule_list, data) end
-	for _, data in pairs(collection_idstrings and collection_idstrings[level_id] or {}) do table.insert(rule_list, data) end
+	if not collection_idstrings.rule_list_cache then
+		-- change format
+		local level_id = Global.level_data and Global.level_data.level_id
+		for _, data in pairs(collection_idstrings and collection_idstrings["common"] or {}) do table.insert(rule_list, data) end
+		for _, data in pairs(collection_idstrings and collection_idstrings[level_id] or {}) do table.insert(rule_list, data) end
+		collection_idstrings.rule_list_cache = rule_list
+	else
+		rule_list = collection_idstrings.rule_list_cache
+	end
 	return rule_list, default_search_list
 end
 
@@ -1988,6 +2011,95 @@ end
 end]]--
 
 
+local function add_waypoint_for_special_mission()
+	local function show_thediamond_tiles_waypoint()
+		if not Global.level_data or Global.level_data.level_id ~= "mus" then return end
+
+		-- the platform that place the Diamond, need to remove waypoints that we added before if the Diamond was taken
+		local display_unit = nil
+		for _, unit in pairs(managers.interaction and managers.interaction._interactive_units or {}) do
+			if unit and alive(unit) and unit.interaction and unit:interaction() and (unit:interaction().tweak_data == "mus_hold_open_display" or unit:interaction().tweak_data == "mus_take_diamond") then
+				display_unit = unit
+				break
+			end
+		end
+
+		local timer_unit = nil
+		for _, unit in pairs(World:find_units_quick("all", 1) or {}) do
+			if unit and alive(unit) and unit:name() == Idstring("units/pd2_indiana/props/gen_prop_security_timer/gen_prop_security_timer") then
+				local digital_gui = (type(unit.digital_gui) == "function") and unit:digital_gui()
+				if digital_gui and digital_gui:is_timer() and type(digital_gui._timer) == 'number' then
+					timer_unit = digital_gui
+				end
+			end
+		end
+
+		local tile_positions = {}
+		for _, script in pairs(managers.mission and managers.mission._scripts or {}) do
+			for id, element in pairs(script:elements()) do
+				if element._editor_name == "area_shape" and element._values and element._values.instance_name and element._values.instance_name:match("^mus_tile_[a-i]00[1-6]$") and #element._shapes > 0 then
+					local shape = element._shapes[1]
+					local rot = shape:rotation()
+					tile_positions[element._values.instance_name] = shape:position() - rot:z() * (shape._properties.height - 20) / 2
+				end
+			end
+		end
+
+		local run_now = true
+		local tile_waypoints = {}
+		local scan_finish = false
+		local function update_thediamond_tiles_waypoint()
+			DelayedCalls:Add("Mark_Enemies_update_thediamond_tiles_waypoint", run_now and 0.01 or 0.25, function()
+				run_now = false
+				for _, script in pairs(not scan_finish and managers.mission and managers.mission._scripts or {}) do
+					for id, element in pairs(script:elements()) do
+						if element._editor_name == "lower_tile_wrong" and element._values and element._values.instance_name and element._values.instance_name:match("^mus_tile_[a-i]00[1-6]$") and element._values.enabled == false then
+							if tile_positions[element._values.instance_name] and not tile_waypoints[element] then
+								local waypoint_name = "tile_" .. tostring(element._values.instance_name)
+								if display_unit and alive(display_unit) and table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[display_unit] and (timer_unit and timer_unit._timer_count_down ~= false) then
+									add_waypoint(tile_positions[element._values.instance_name], waypoint_name)
+								end
+								tile_waypoints[element] = waypoint_name
+								if element._values.instance_name:match("^mus_tile_i00[1-6]$") then
+									scan_finish = true
+								end
+							end
+						end
+					end
+				end
+
+				-- remove waypoint if the Diamond was taken, or platform disappeared when stepped on wrong tile
+				if not display_unit or not alive(display_unit) or not table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[display_unit] then
+					for _, waypoint_name in pairs(tile_waypoints) do
+						remove_waypoint(waypoint_name)
+					end
+					return
+				end
+
+				-- about timer_unit._timer_count_down:
+				-- 	nil: no timer count down in low difficulty, or timer havn't initialize in high difficulty
+				-- 	true: normal count down mode in high difficulty
+				-- 	false: if count down is end, or when drill finish if player stepped on wrong tile
+				if timer_unit and timer_unit._timer_count_down == nil and next(tile_waypoints) and not scan_finish then
+					update_thediamond_tiles_waypoint()
+				elseif timer_unit and timer_unit._timer_count_down ~= nil then
+					if timer_unit._timer > 0 and timer_unit._timer_count_down then
+						update_thediamond_tiles_waypoint()
+					else
+						-- remove waypoint if time is end
+						for _, waypoint_name in pairs(tile_waypoints) do
+							remove_waypoint(waypoint_name)
+						end
+					end
+				end
+			end)
+		end
+		update_thediamond_tiles_waypoint()
+	end
+	show_thediamond_tiles_waypoint()
+end
+
+
 global_markenemies_waypoint_cache = global_markenemies_waypoint_cache or {}
 global_markenemies_waypoint_list_idx = global_markenemies_waypoint_list_idx or nil -- current idx
 
@@ -2098,6 +2210,9 @@ local function show_next_waypoint_list(idx)
 		end
 		do_auto_refresh_waypoint()
 	end
+
+	-- always show special waypoint
+	add_waypoint_for_special_mission()
 
 	-- search from next_idx to max_idx
 	for i = global_markenemies_waypoint_list_idx + 1, 4 do
