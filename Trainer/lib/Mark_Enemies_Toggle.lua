@@ -2011,92 +2011,378 @@ end
 end]]--
 
 
-local function add_waypoint_for_special_mission()
-	local function show_thediamond_tiles_waypoint()
+-- return true: special unit found and start scan
+local function add_waypoint_for_special_mission(enable)
+	local function show_thediamond_tiles_waypoint(enable)
 		if not Global.level_data or Global.level_data.level_id ~= "mus" then return end
 
-		-- the platform that place the Diamond, need to remove waypoints that we added before if the Diamond was taken
-		local display_unit = nil
-		for _, unit in pairs(managers.interaction and managers.interaction._interactive_units or {}) do
-			if unit and alive(unit) and unit.interaction and unit:interaction() and (unit:interaction().tweak_data == "mus_hold_open_display" or unit:interaction().tweak_data == "mus_take_diamond") then
-				display_unit = unit
-				break
+		if enable then
+			-- the platform that place the Diamond, need to remove waypoints that we added before if the Diamond was taken
+			local display_unit = nil
+			for _, unit in pairs(managers.interaction and managers.interaction._interactive_units or {}) do
+				if unit and alive(unit) and unit.interaction and unit:interaction() and (unit:interaction().tweak_data == "mus_hold_open_display" or unit:interaction().tweak_data == "mus_take_diamond") then
+					display_unit = unit
+					break
+				end
 			end
-		end
 
-		local timer_unit = nil
-		for _, unit in pairs(World:find_units_quick("all", 1) or {}) do
-			if unit and alive(unit) and unit:name() == Idstring("units/pd2_indiana/props/gen_prop_security_timer/gen_prop_security_timer") then
-				local digital_gui = (type(unit.digital_gui) == "function") and unit:digital_gui()
-				if digital_gui and digital_gui:is_timer() and type(digital_gui._timer) == 'number' then
-					timer_unit = digital_gui
+			local timer_unit = nil
+			for _, unit in pairs(World:find_units_quick("all", 1) or {}) do
+				if unit and alive(unit) and unit:name() == Idstring("units/pd2_indiana/props/gen_prop_security_timer/gen_prop_security_timer") then
+					local digital_gui = (type(unit.digital_gui) == "function") and unit:digital_gui()
+					if digital_gui and digital_gui:is_timer() and type(digital_gui._timer) == 'number' then
+						timer_unit = digital_gui
+					end
+				end
+			end
+
+			local tiles = {}
+			local tile_positions = {}
+			local is_any_active_tile = false
+			for _, script in pairs(managers.mission and managers.mission._scripts or {}) do
+				for id, element in pairs(script:elements() or {}) do
+					if element:editor_name() == "lower_tile_wrong" and element:values() and element:values().instance_name and element:values().instance_name:match("^mus_tile_[a-i]00[1-6]$") then
+						tiles[element:values().instance_name] = element
+						if element:enabled() == false and table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[display_unit] and timer_unit and timer_unit._timer_count_down ~= false then
+							is_any_active_tile = true
+						end
+					elseif element:editor_name() == "area_shape" and element:values() and element:values().instance_name and element:values().instance_name:match("^mus_tile_[a-i]00[1-6]$") and #element._shapes > 0 then
+						local shape = element._shapes[1]
+						local rot = shape:rotation()
+						tile_positions[element._values.instance_name] = shape:position() - rot:z() * (shape._properties.height - 20) / 2
+					end
+				end
+			end
+
+			local run_now = true
+			local tile_waypoints = {}
+			local scan_finish = false
+			local function update_thediamond_tiles_waypoint()
+				DelayedCalls:Add("Mark_Enemies_update_thediamond_tiles_waypoint", run_now and 0.01 or 0.25, function()
+					run_now = false
+					for instance_name, element in pairs(not scan_finish and tiles or {}) do
+						if element:enabled() == false and tile_positions[instance_name] and not tile_waypoints[element] then
+							local waypoint_name = "tile_" .. tostring(instance_name)
+							if display_unit and alive(display_unit) and table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[display_unit] and (timer_unit and timer_unit._timer_count_down ~= false) then
+								add_waypoint(tile_positions[instance_name], waypoint_name)
+							end
+							tile_waypoints[element] = waypoint_name
+							if instance_name:match("^mus_tile_i00[1-6]$") then
+								scan_finish = true
+							end
+						end
+					end
+
+					-- remove waypoint if the Diamond was taken, or platform disappeared when stepped on wrong tile
+					if not display_unit or not alive(display_unit) or not table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[display_unit] then
+						for _, waypoint_name in pairs(tile_waypoints) do
+							remove_waypoint(waypoint_name)
+						end
+						return
+					end
+
+					-- about timer_unit._timer_count_down:
+					-- 	nil: no timer count down in low difficulty, or timer havn't initialize in high difficulty
+					-- 	true: normal count down mode in high difficulty, remain true if drill not finish when player stepped on wrong tile
+					-- 	false: if count down is end, or when drill finish if player stepped on wrong tile
+					if timer_unit and timer_unit._timer_count_down == nil and next(tile_waypoints) and not scan_finish then
+						update_thediamond_tiles_waypoint()
+					elseif timer_unit and timer_unit._timer_count_down ~= nil then
+						if timer_unit._timer > 0 and timer_unit._timer_count_down then
+							update_thediamond_tiles_waypoint()
+						else
+							-- remove waypoint if time is end
+							for _, waypoint_name in pairs(tile_waypoints) do
+								remove_waypoint(waypoint_name)
+							end
+						end
+					end
+				end)
+			end
+			if is_any_active_tile then
+				update_thediamond_tiles_waypoint()
+				return true
+			end
+		else
+			DelayedCalls:Remove("Mark_Enemies_update_thediamond_tiles_waypoint")
+			DelayedCalls:Add("Mark_Enemies_update_thediamond_tiles_waypoint", 0, function() end)
+
+			for _, letter1 in pairs({ 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i' }) do
+				for _, letter2 in pairs({ '1', '2', '3', '4', '5', '6' }) do
+					local waypoint_name = "tile_" .. "mus_tile_" .. letter1 .. "00" .. letter2
+					remove_waypoint(waypoint_name)
 				end
 			end
 		end
+	end
 
-		local tile_positions = {}
-		for _, script in pairs(managers.mission and managers.mission._scripts or {}) do
-			for id, element in pairs(script:elements()) do
-				if element._editor_name == "area_shape" and element._values and element._values.instance_name and element._values.instance_name:match("^mus_tile_[a-i]00[1-6]$") and #element._shapes > 0 then
-					local shape = element._shapes[1]
-					local rot = shape:rotation()
-					tile_positions[element._values.instance_name] = shape:position() - rot:z() * (shape._properties.height - 20) / 2
+	local function show_meth_sequence_waypoint(enable)
+		if not Global.level_data or not (Global.level_data.level_id == "rat" or Global.level_data.level_id == "alex_1" or Global.level_data.level_id == "mex_cooking") then return end
+
+		if enable then
+			local needed_chem = {
+				pln_rt1_20 = "methlab_bubbling", pln_rt1_22 = "methlab_caustic_cooler", pln_rt1_24 = "methlab_gas_to_salt",
+				Play_loc_mex_cook_03="methlab_bubbling", Play_loc_mex_cook_04="methlab_caustic_cooler", Play_loc_mex_cook_05="methlab_gas_to_salt",
+				pln_rat_stage1_20 = "methlab_bubbling", pln_rat_stage1_22="methlab_caustic_cooler", pln_rat_stage1_24="methlab_gas_to_salt",
+			}
+			local lab_units = {}
+			for _, unit in pairs(World:find_units_quick("all", 1) or {}) do
+				if unit and alive(unit) and unit.interaction and unit:interaction() and (unit:interaction().tweak_data == "methlab_bubbling" or unit:interaction().tweak_data == "methlab_caustic_cooler" or unit:interaction().tweak_data == "methlab_gas_to_salt") then
+					lab_units[unit:interaction().tweak_data] = unit
 				end
 			end
-		end
 
-		local run_now = true
-		local tile_waypoints = {}
-		local scan_finish = false
-		local function update_thediamond_tiles_waypoint()
-			DelayedCalls:Add("Mark_Enemies_update_thediamond_tiles_waypoint", run_now and 0.01 or 0.25, function()
-				run_now = false
-				for _, script in pairs(not scan_finish and managers.mission and managers.mission._scripts or {}) do
-					for id, element in pairs(script:elements()) do
-						if element._editor_name == "lower_tile_wrong" and element._values and element._values.instance_name and element._values.instance_name:match("^mus_tile_[a-i]00[1-6]$") and element._values.enabled == false then
-							if tile_positions[element._values.instance_name] and not tile_waypoints[element] then
-								local waypoint_name = "tile_" .. tostring(element._values.instance_name)
-								if display_unit and alive(display_unit) and table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[display_unit] and (timer_unit and timer_unit._timer_count_down ~= false) then
-									add_waypoint(tile_positions[element._values.instance_name], waypoint_name)
-								end
-								tile_waypoints[element] = waypoint_name
-								if element._values.instance_name:match("^mus_tile_i00[1-6]$") then
-									scan_finish = true
+			Hooks:PostHook(DialogManager, "queue_dialog", "Mark_Enemies_update_meth_sequence_waypoint", function(self, id, ...)
+				if needed_chem[id] then
+					local unit = lab_units[needed_chem[id]]
+					if unit and alive(unit) and unit.interaction and unit:interaction() and unit:interaction().interact_position and unit:interaction():interact_position() then
+						-- compatible with fast cook
+						remove_waypoint("meth_sequence_waypoint_methlab_bubbling")
+						remove_waypoint("meth_sequence_waypoint_methlab_caustic_cooler")
+						remove_waypoint("meth_sequence_waypoint_methlab_gas_to_salt")
+
+						local waypoint_name = "meth_sequence_waypoint_" .. tostring(needed_chem[id])
+						add_waypoint(unit:interaction():interact_position() + Vector3(0, 0, 20), waypoint_name, "equipment_vial")
+						-- waypoint will disappear after 10s
+						DelayedCalls:Add("Mark_Enemies_update_meth_sequence_waypoint_" .. tostring(needed_chem[id]), 10, function()
+							remove_waypoint(waypoint_name)
+						end)
+					end
+				end
+			end)
+			if next(lab_units) then
+				return true
+			end
+		else
+			Hooks:RemovePostHook("Mark_Enemies_update_meth_sequence_waypoint")
+			DelayedCalls:Remove("Mark_Enemies_update_meth_sequence_waypoint_methlab_bubbling")
+			DelayedCalls:Add("Mark_Enemies_update_meth_sequence_waypoint_methlab_bubbling", 0, function() end)
+			DelayedCalls:Remove("Mark_Enemies_update_meth_sequence_waypoint_methlab_caustic_cooler")
+			DelayedCalls:Add("Mark_Enemies_update_meth_sequence_waypoint_methlab_caustic_cooler", 0, function() end)
+			DelayedCalls:Remove("Mark_Enemies_update_meth_sequence_waypoint_methlab_gas_to_salt")
+			DelayedCalls:Add("Mark_Enemies_update_meth_sequence_waypoint_methlab_gas_to_salt", 0, function() end)
+
+			remove_waypoint("meth_sequence_waypoint_methlab_bubbling")
+			remove_waypoint("meth_sequence_waypoint_methlab_caustic_cooler")
+			remove_waypoint("meth_sequence_waypoint_methlab_gas_to_salt")
+		end
+	end
+
+	local function show_labrats_meth_waypoint(enable)
+		if not Global.level_data or Global.level_data.level_id ~= "nail" then return end
+
+		if enable then
+			local needed_chem = {
+				pln_rt1_20 = "muriatic_acid", pln_rat_stage1_20 = "muriatic_acid",
+				pln_rt1_24 = "hydrogen_chloride", pln_rat_stage1_24 = "hydrogen_chloride",
+				pln_rt1_22 = "caustic_soda", pln_rat_stage1_22 = "caustic_soda",
+			}
+			local chem_data = {
+				-- color is bag color, prevent taking wrong bag if bags are overlapping
+				muriatic_acid = { bag_id = "nail_muriatic_acid", drop_position = Vector3(868.6, -754.2, 1578.6), color = Color(0.95, 0.05, 0.22), },
+				hydrogen_chloride = { bag_id = "nail_hydrogen_chloride", drop_position = Vector3(-5638.2, -821.3, 1213), color = Color(0.05, 0.85, 0.25), },
+				caustic_soda = { bag_id = "nail_caustic_soda", drop_position = Vector3(-4116.9, 580.7, 1456.8), color = Color(0.2, 0.45, 0.95), },
+			}
+
+			local bag_waypoints = {
+				["labrats_meth_bag_waypoint_1"] = { unit = nil, position = nil, color = nil, },
+				["labrats_meth_bag_waypoint_2"] = { unit = nil, position = nil, color = nil, },
+				["labrats_meth_bag_waypoint_3"] = { unit = nil, position = nil, color = nil, },
+			}
+			local last_chem_id = nil
+			Hooks:PostHook(DialogManager, "queue_dialog", "Mark_Enemies_update_labrats_meth_waypoint", function(self, id, ...)
+				if last_chem_id ~= id and needed_chem[id] and chem_data[needed_chem[id]] then
+					local drop_waypoint_name = "labrats_meth_drop_waypoint"
+					add_waypoint(chem_data[needed_chem[id]].drop_position, drop_waypoint_name, "equipment_vial", chem_data[needed_chem[id]].color)
+
+					-- reset bag waypoint if need new chem
+					remove_waypoint("labrats_meth_bag_waypoint_1")
+					remove_waypoint("labrats_meth_bag_waypoint_2")
+					remove_waypoint("labrats_meth_bag_waypoint_3")
+					bag_waypoints = {
+						["labrats_meth_bag_waypoint_1"] = { unit = nil, position = nil, color = nil, },
+						["labrats_meth_bag_waypoint_2"] = { unit = nil, position = nil, color = nil, },
+						["labrats_meth_bag_waypoint_3"] = { unit = nil, position = nil, color = nil, },
+					}
+					last_chem_id = id
+				elseif id == "Play_pln_nai_09" or id == "Play_pln_nai_10" then
+					-- no need to update bag waypoint during smash meth event
+					remove_waypoint("labrats_meth_drop_waypoint")
+					remove_waypoint("labrats_meth_bag_waypoint_1")
+					remove_waypoint("labrats_meth_bag_waypoint_2")
+					remove_waypoint("labrats_meth_bag_waypoint_3")
+					last_chem_id = nil
+				end
+			end)
+
+			-- remove bag waypoint if bag was taken by player, update bag position if bag was taken by enemies
+			local function update_labrats_meth_bag_waypoint()
+				DelayedCalls:Add("Mark_Enemies_update_labrats_meth_bag_waypoint", 5, function()
+					local chem = needed_chem[last_chem_id]
+					if chem and chem_data[chem] then
+						local need_scan_bag = false
+						for bag_waypoint_name, data in pairs(bag_waypoints or {}) do
+							local unit = data.unit
+							if unit and not alive(unit) then
+								remove_waypoint(bag_waypoint_name)
+								data.unit = nil
+								data.position = nil
+							elseif unit and alive(unit) and unit.interaction and unit:interaction() and unit:interaction().interact_position and unit:interaction():interact_position() ~= data.position then
+								remove_waypoint(bag_waypoint_name)
+								local new_position = Vector3()
+								mvector3.set(new_position, unit:interaction():interact_position())
+								add_waypoint(new_position, bag_waypoint_name, "wp_bag", data.color)
+								data.position = new_position
+							end
+							if not data.unit then
+								need_scan_bag = true
+							end
+						end
+
+						if need_scan_bag then
+							for _, unit in pairs(managers.interaction and managers.interaction._interactive_units or {}) do
+								if unit and alive(unit) and unit.carry_data and unit:carry_data() and unit:carry_data().carry_id and unit:carry_data():carry_id() == chem_data[chem].bag_id and unit.interaction and unit:interaction() and unit:interaction().interact_position and unit:interaction():interact_position() then
+									local is_in_cache = false
+									local bag_waypoint_name = nil
+									local bag_waypoint_position = Vector3()
+									local bag_waypoint_color = chem_data[chem].color
+									mvector3.set(bag_waypoint_position, unit:interaction():interact_position())
+									for wp_name, data in pairs(bag_waypoints) do
+										if data.unit == unit then
+											is_in_cache = true
+											break
+										end
+										-- assign waypoint name
+										if not data.unit then
+											bag_waypoint_name = wp_name
+										end
+									end
+									if not is_in_cache and bag_waypoint_name then
+										add_waypoint(bag_waypoint_position, bag_waypoint_name, "wp_bag", bag_waypoint_color)
+										bag_waypoints[bag_waypoint_name] = { unit = unit, position = bag_waypoint_position, color = bag_waypoint_color, }
+									end
 								end
 							end
 						end
 					end
-				end
 
-				-- remove waypoint if the Diamond was taken, or platform disappeared when stepped on wrong tile
-				if not display_unit or not alive(display_unit) or not table.list_to_set(managers.interaction and managers.interaction._interactive_units or {})[display_unit] then
-					for _, waypoint_name in pairs(tile_waypoints) do
-						remove_waypoint(waypoint_name)
+					update_labrats_meth_bag_waypoint()
+				end)
+			end
+			update_labrats_meth_bag_waypoint()
+			return true
+		else
+			Hooks:RemovePostHook("Mark_Enemies_update_labrats_meth_waypoint")
+			DelayedCalls:Remove("Mark_Enemies_update_labrats_meth_bag_waypoint")
+			DelayedCalls:Add("Mark_Enemies_update_labrats_meth_bag_waypoint", 0, function() end)
+
+			remove_waypoint("labrats_meth_drop_waypoint")
+			remove_waypoint("labrats_meth_bag_waypoint_1")
+			remove_waypoint("labrats_meth_bag_waypoint_2")
+			remove_waypoint("labrats_meth_bag_waypoint_3")
+		end
+	end
+
+	local function show_meth_order_waypoint(enable)
+		if not Global.level_data or not (Global.level_data.level_id == "crojob2" or Global.level_data.level_id == "mia_1") then return end
+
+		if enable then
+			-- show waypoint with color RGB, which are cook order
+			local is_unit_found = false
+			for _, unit in pairs(World:find_units_quick("all", 1) or {}) do
+				if unit and alive(unit) and unit.interaction and unit:interaction() and unit:interaction().interact_position and unit:interaction():interact_position() then
+					local position = unit:interaction():interact_position() + Vector3(0, 0, 20)
+					if unit:interaction().tweak_data == "methlab_bubbling" then -- muriatic_acid
+						is_unit_found = true
+						local waypoint_name = "meth_order_waypoint_methlab_bubbling"
+						add_waypoint(position, waypoint_name, "equipment_vial", Color(0.95, 0.05, 0.22))
+					elseif unit:interaction().tweak_data == "methlab_caustic_cooler" then -- caustic_soda
+						is_unit_found = true
+						local waypoint_name = "meth_order_waypoint_methlab_caustic_cooler"
+						add_waypoint(position, waypoint_name, "equipment_vial", Color(0.05, 0.85, 0.25))
+					elseif unit:interaction().tweak_data == "methlab_gas_to_salt" then -- hydrogen_chloride
+						is_unit_found = true
+						local waypoint_name = "meth_order_waypoint_methlab_gas_to_salt"
+						add_waypoint(position, waypoint_name, "equipment_vial", Color(0.2, 0.45, 0.95))
 					end
-					return
 				end
+			end
+			if is_unit_found then
+				return true
+			end
+		else
+			remove_waypoint("meth_order_waypoint_methlab_bubbling")
+			remove_waypoint("meth_order_waypoint_methlab_caustic_cooler")
+			remove_waypoint("meth_order_waypoint_methlab_gas_to_salt")
+		end
+	end
 
-				-- about timer_unit._timer_count_down:
-				-- 	nil: no timer count down in low difficulty, or timer havn't initialize in high difficulty
-				-- 	true: normal count down mode in high difficulty
-				-- 	false: if count down is end, or when drill finish if player stepped on wrong tile
-				if timer_unit and timer_unit._timer_count_down == nil and next(tile_waypoints) and not scan_finish then
-					update_thediamond_tiles_waypoint()
-				elseif timer_unit and timer_unit._timer_count_down ~= nil then
-					if timer_unit._timer > 0 and timer_unit._timer_count_down then
-						update_thediamond_tiles_waypoint()
-					else
-						-- remove waypoint if time is end
-						for _, waypoint_name in pairs(tile_waypoints) do
-							remove_waypoint(waypoint_name)
+	local function show_alesso_button_waypoint(enable)
+		if not Global.level_data or Global.level_data.level_id ~= "arena" then return end
+
+		if enable then
+			local buttons = {
+				["left_button"] = nil,
+				["middle_button"] = nil,
+				["right_button"] = nil,
+			}
+			for _, unit in pairs(World:find_units_quick("all", 1) or {}) do
+				if unit and alive(unit) and unit.interaction and unit:interaction() and unit:interaction().tweak_data == "push_button" then
+					if mvector3.distance(unit:position(), Vector3(-434, 5326.09, 914.832)) < 10 then
+						buttons["left_button"] = unit
+					elseif mvector3.distance(unit:position(), Vector3(-259, 5326.09, 914.832)) < 10 then
+						buttons["middle_button"] = unit
+					elseif mvector3.distance(unit:position(), Vector3(-84, 5326.09, 914.832)) < 10 then
+						buttons["right_button"] = unit
+					end
+				end
+			end
+
+			local actions = {
+				Play_pln_al1_left = {"left_button"},
+				Play_pln_al1_middle = {"middle_button"},
+				Play_pln_al1_right = {"right_button"},
+				Play_pln_al1_left_middle = {[1]="left_button", [2]="middle_button"},
+				Play_pln_al1_left_right = {[1]="left_button", [2]="right_button"},
+				Play_pln_al1_middle_left = {[1]="middle_button", [2]="left_button"},
+				Play_pln_al1_middle_right = {[1]="middle_button", [2]="right_button"},
+				Play_pln_al1_right_left = {[1]="right_button", [2]="left_button"},
+				Play_pln_al1_right_middle = {[1]="right_button", [2]="middle_button"},
+			}
+			Hooks:PostHook(DialogManager, "queue_dialog", "Mark_Enemies_update_alesso_button_waypoint", function(self, id, ...)
+				if actions[id] then
+					remove_waypoint("alesso_button_waypoint_left_button")
+					remove_waypoint("alesso_button_waypoint_middle_button")
+					remove_waypoint("alesso_button_waypoint_right_button")
+
+					for _, button_name in pairs(actions[id]) do
+						if buttons[button_name] then
+							local waypoint_name = "alesso_button_waypoint_" .. tostring(button_name)
+							add_waypoint(buttons[button_name]:position(), waypoint_name, "wp_target")
 						end
 					end
+					DelayedCalls:Add("Mark_Enemies_update_alesso_button_waypoint", 10, function()
+						remove_waypoint("alesso_button_waypoint_left_button")
+						remove_waypoint("alesso_button_waypoint_middle_button")
+						remove_waypoint("alesso_button_waypoint_right_button")
+					end)
 				end
 			end)
+			if next(buttons) then
+				return true
+			end
+		else
+			Hooks:RemovePostHook("Mark_Enemies_update_alesso_button_waypoint")
+			DelayedCalls:Remove("Mark_Enemies_update_alesso_button_waypoint")
+			DelayedCalls:Add("Mark_Enemies_update_alesso_button_waypoint", 0, function() end)
+
+			remove_waypoint("alesso_button_waypoint_left_button")
+			remove_waypoint("alesso_button_waypoint_middle_button")
+			remove_waypoint("alesso_button_waypoint_right_button")
 		end
-		update_thediamond_tiles_waypoint()
 	end
-	show_thediamond_tiles_waypoint()
+
+	return show_thediamond_tiles_waypoint(enable) or show_meth_sequence_waypoint(enable) or show_labrats_meth_waypoint(enable) or show_meth_order_waypoint(enable) or show_alesso_button_waypoint(enable)
 end
 
 
@@ -2167,7 +2453,11 @@ local function determine_waypoint(waypoint_list_idx, unit_list, refresh)
 		update_determined_waypoint(default_search_list, rule_list)
 	else
 		remove_determined_waypoints()
-		if update_determined_waypoint(default_search_list, rule_list) then
+		if waypoint_list_idx == 1 and add_waypoint_for_special_mission(true) then
+			update_determined_waypoint(default_search_list, rule_list)
+			managers.mission._fading_debug_output:script().log(tostring(hint_msg),  Color.green)
+			return true
+		elseif update_determined_waypoint(default_search_list, rule_list) then
 			managers.mission._fading_debug_output:script().log(tostring(hint_msg),  Color.green)
 			return true
 		end
@@ -2211,9 +2501,6 @@ local function show_next_waypoint_list(idx)
 		do_auto_refresh_waypoint()
 	end
 
-	-- always show special waypoint
-	add_waypoint_for_special_mission()
-
 	-- search from next_idx to max_idx
 	for i = global_markenemies_waypoint_list_idx + 1, 4 do
 		if determine_waypoint(i) then
@@ -2238,6 +2525,7 @@ local function hide_waypoints_list()
 	DelayedCalls:Remove("Mark_Enemies_auto_refresh_waypoint")
 	DelayedCalls:Add("Mark_Enemies_auto_refresh_waypoint", 0, function() end)
 
+	add_waypoint_for_special_mission(false)
 	remove_determined_waypoints()
 end
 
